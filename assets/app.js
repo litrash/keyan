@@ -58,7 +58,9 @@
   }
 
   /* ---------------- 数据层 ---------------- */
-  const emptyDB = () => ({ tasks: [], experiments: [], papers: [], milestones: [] });
+  const COLLECTIONS = ['tasks', 'experiments', 'papers', 'milestones', 'journal'];
+  // settings 存放随账号同步的轻量配置（如主题），不是数组
+  const emptyDB = () => ({ tasks: [], experiments: [], papers: [], milestones: [], journal: [], settings: {} });
   let DB = emptyDB();
 
   /* ---- 云端同步状态 ---- */
@@ -72,16 +74,22 @@
     if (el) { el.textContent = text ? '· ' + text : ''; el.className = cls || ''; }
   }
 
+  /** 把任意来源的数据对象规范成完整 DB 结构（保证集合都是数组、settings 是对象） */
+  function normalizeDB(obj) {
+    const out = emptyDB();
+    if (obj && typeof obj === 'object') {
+      Object.assign(out, obj);
+    }
+    COLLECTIONS.forEach(k => { if (!Array.isArray(out[k])) out[k] = []; });
+    if (!out.settings || typeof out.settings !== 'object' || Array.isArray(out.settings)) out.settings = {};
+    return out;
+  }
+
   function load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        const obj = JSON.parse(raw);
-        DB = Object.assign(emptyDB(), obj);
-        // 保证是数组
-        ['tasks', 'experiments', 'papers', 'milestones'].forEach(k => {
-          if (!Array.isArray(DB[k])) DB[k] = [];
-        });
+        DB = normalizeDB(JSON.parse(raw));
       } else {
         // 首次访问：留空，等登录后从云端拉取。
         // 不再自动灌入示例数据——否则新账号会把示例数据当成自己的进度推到云端。
@@ -145,8 +153,8 @@
           ? true
           : confirm('云端数据已被其他设备更新。\n\n点「确定」用云端版本覆盖本机，点「取消」用本机版本覆盖云端。');
         if (useRemote) {
-          DB = Object.assign(emptyDB(), remote.payload);
-          ['tasks', 'experiments', 'papers', 'milestones'].forEach(k => { if (!Array.isArray(DB[k])) DB[k] = []; });
+          DB = normalizeDB(remote.payload);
+          COLLECTIONS.forEach(k => { if (!Array.isArray(DB[k])) DB[k] = []; });
           Cloud.store.revision = remote.revision;
           saveLocal();
           renderAll();
@@ -176,7 +184,7 @@
     setSyncState('读取云端…', 'saving');
     try {
       const d = await Cloud.pull();
-      const KEYS = ['tasks', 'experiments', 'papers', 'milestones'];
+      const KEYS = COLLECTIONS;
       const remoteEmpty = KEYS.every(k => !Array.isArray(d.payload[k]) || d.payload[k].length === 0);
       const localHasData = KEYS.some(k => Array.isArray(DB[k]) && DB[k].length > 0);
 
@@ -198,7 +206,7 @@
       }
 
       // 默认：以云端为准
-      DB = Object.assign(emptyDB(), d.payload);
+      DB = normalizeDB(d.payload);
       KEYS.forEach(k => { if (!Array.isArray(DB[k])) DB[k] = []; });
       saveLocal();
       renderAll();
@@ -371,6 +379,155 @@
   }
 
   /* ============================================================
+   * 渲染：科研日记
+   * ============================================================ */
+  let journalFilter = 'all';     // all | 心情 key | 'tag:xxx'
+
+  function renderJournal() {
+    const q = ($('#journalSearch').value || '').trim().toLowerCase();
+    let list = DB.journal.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+    if (journalFilter !== 'all') {
+      if (journalFilter.indexOf('tag:') === 0) {
+        const tag = journalFilter.slice(4);
+        list = list.filter(j => (j.tags || []).includes(tag));
+      } else {
+        list = list.filter(j => j.mood === journalFilter);
+      }
+    }
+    if (q) {
+      list = list.filter(j =>
+        (j.title || '').toLowerCase().includes(q) ||
+        (j.body || '').toLowerCase().includes(q) ||
+        (j.tags || []).join(' ').toLowerCase().includes(q));
+    }
+
+    $('#journalEmpty').hidden = list.length > 0;
+    if (!list.length) {
+      $('#journalEmpty').textContent = DB.journal.length
+        ? '没有符合条件的日记。'
+        : '还没有日记，点右上角「写日记」记录今天。';
+    }
+
+    $('#journalList').innerHTML = list.map(j => {
+      const m = moodOf(j.mood);
+      const tags = (j.tags || []).map(x => `<span class="tag">${esc(x)}</span>`).join('');
+      const linked = j.linkTask ? DB.tasks.find(t => t.id === j.linkTask) : null;
+      return `<div class="j-item" data-type="journal" data-id="${j.id}">
+        <div class="j-head">
+          <span class="j-date">${esc(j.date || '未填日期')}</span>
+          ${m ? `<span class="j-mood" title="${esc(m.n)}">${m.e}</span>` : ''}
+          ${j.title ? `<span class="j-title">${esc(j.title)}</span>` : ''}
+        </div>
+        ${j.body ? `<div class="j-body">${esc(j.body)}</div>` : ''}
+        ${linked ? `<div class="row" style="margin-top:6px;font-size:12.5px">🔗 关联任务：${esc(linked.title)}</div>` : ''}
+        ${tags ? `<div class="j-tags">${tags}</div>` : ''}
+      </div>`;
+    }).join('');
+
+    renderJournalFilters();
+    renderJournalStats();
+  }
+
+  function renderJournalFilters() {
+    const counts = {};
+    const tagCounts = {};
+    DB.journal.forEach(j => {
+      if (j.mood) counts[j.mood] = (counts[j.mood] || 0) + 1;
+      (j.tags || []).forEach(t => { tagCounts[t] = (tagCounts[t] || 0) + 1; });
+    });
+    const chips = [`<button class="chip ${journalFilter === 'all' ? 'active' : ''}" data-jf="all">全部 (${DB.journal.length})</button>`];
+    MOODS.forEach(m => {
+      const n = counts[m.k] || 0;
+      if (n === 0 && journalFilter !== m.k) return;
+      chips.push(`<button class="chip ${journalFilter === m.k ? 'active' : ''}" data-jf="${m.k}">${m.e} ${m.n} (${n})</button>`);
+    });
+    Object.keys(tagCounts).sort().forEach(t => {
+      chips.push(`<button class="chip ${journalFilter === 'tag:' + t ? 'active' : ''}" data-jf="tag:${esc(t)}">#${esc(t)} (${tagCounts[t]})</button>`);
+    });
+    $('#journalFilters').innerHTML = chips.join('');
+  }
+
+  function renderJournalStats() {
+    const total = DB.journal.length;
+    // 连续记录天数：从今天（或昨天）往前数
+    const days = new Set(DB.journal.map(j => j.date).filter(Boolean));
+    let streak = 0;
+    const d = new Date();
+    if (!days.has(d.toISOString().slice(0, 10))) d.setDate(d.getDate() - 1);
+    while (days.has(d.toISOString().slice(0, 10))) { streak++; d.setDate(d.getDate() - 1); }
+
+    const thisMonth = new Date().toISOString().slice(0, 7);
+    const monthCount = DB.journal.filter(j => (j.date || '').indexOf(thisMonth) === 0).length;
+
+    $('#journalStat').innerHTML =
+      `<div>总篇数 <b>${total}</b></div>` +
+      `<div>连续记录 <b>${streak}</b> 天</div>` +
+      `<div>本月 <b>${monthCount}</b> 篇</div>`;
+
+    // 近 12 周热力图（每格一天）
+    const counts = {};
+    DB.journal.forEach(j => { if (j.date) counts[j.date] = (counts[j.date] || 0) + 1; });
+    const cells = [];
+    const cur = new Date();
+    cur.setDate(cur.getDate() - 83);
+    for (let i = 0; i < 84; i++) {
+      const key = cur.toISOString().slice(0, 10);
+      const n = counts[key] || 0;
+      const lvl = n === 0 ? '' : n === 1 ? 'l1' : n === 2 ? 'l2' : n <= 4 ? 'l3' : 'l4';
+      cells.push(`<i class="${lvl}" title="${key}：${n} 篇"></i>`);
+      cur.setDate(cur.getDate() + 1);
+    }
+    $('#journalHeat').innerHTML = cells.join('');
+  }
+
+  /* ============================================================
+   * 设置面板
+   * ============================================================ */
+  function renderSettings() {
+    // 主题卡片
+    const tm = window.ThemeManager;
+    if (tm && $('#themeGrid')) {
+      $('#themeGrid').innerHTML = tm.list().map(t => {
+        const sw = t.colors.map(c => `<i style="background:${c}"></i>`).join('');
+        return `<button class="theme-opt ${tm.get() === t.key ? 'active' : ''}" data-theme-key="${t.key}">
+          <div class="swatch">${sw}</div>
+          <div class="tname">${esc(t.name)}</div>
+          <div class="tdesc">${esc(t.desc)}</div>
+        </button>`;
+      }).join('');
+    }
+
+    // 番茄钟配置
+    const p = window.Pomodoro && window.Pomodoro.getConfig();
+    if (p && $('#setPomoFocus')) {
+      $('#setPomoFocus').value = String(p.focus);
+      $('#setPomoBreak').value = String(p.break);
+      $('#setPomoNotify').checked = !!p.notify;
+      $('#setPomoSound').checked = !!p.sound;
+      $('#setPomoAutoBreak').checked = !!p.autoBreak;
+    }
+
+    // 数据概览
+    const n = (k) => (DB[k] || []).length;
+    const meta = $('#settingsMeta');
+    if (meta) {
+      meta.textContent =
+        `当前：任务 ${n('tasks')} · 实验 ${n('experiments')} · 文献 ${n('papers')} · 日记 ${n('journal')} · 里程碑 ${n('milestones')}` +
+        (Cloud && Cloud.store.revision != null ? ` · 云端版本 r${Cloud.store.revision}` : ' · 未同步');
+    }
+
+    // 账号
+    const acc = $('#settingsAccount');
+    if (acc) {
+      const u = Cloud && Cloud.currentUser();
+      acc.textContent = u
+        ? `已登录：${u.email}。数据同步到云端，可在其他电脑登录同一账号访问。`
+        : '未登录';
+    }
+  }
+
+  /* ============================================================
    * 渲染：时间线
    * ============================================================ */
   function renderTimeline() {
@@ -530,10 +687,32 @@
         { k: 'note', label: '说明', type: 'textarea', full: true }
       ],
       defaults: { title: '', date: todayISO(), done: false, note: '' }
+    },
+    journal: {
+      title: '日记',
+      fields: [
+        { k: 'date', label: '日期', type: 'date' },
+        { k: 'mood', label: '心情', type: 'mood' },
+        { k: 'title', label: '标题', type: 'text', full: true, placeholder: '今天的一句话总结…' },
+        { k: 'linkTask', label: '关联任务（可选）', type: 'tasks' },
+        { k: 'tagsText', label: '标签（逗号分隔）', type: 'text', full: true },
+        { k: 'body', label: '正文', type: 'textarea', full: true, rows: 9 }
+      ],
+      defaults: { date: todayISO(), mood: '', title: '', linkTask: '', tagsText: '', body: '' }
     }
   };
 
-  const DATA_KEY = { task: 'tasks', experiment: 'experiments', paper: 'papers', milestone: 'milestones' };
+  /* 心情选项（日记用） */
+  const MOODS = [
+    { k: 'great', e: '😄', n: '很棒' },
+    { k: 'good',  e: '🙂', n: '不错' },
+    { k: 'ok',    e: '😐', n: '一般' },
+    { k: 'tired', e: '😮‍💨', n: '疲惫' },
+    { k: 'bad',   e: '😣', n: '糟糕' }
+  ];
+  const moodOf = (k) => MOODS.find(m => m.k === k) || null;
+
+  const DATA_KEY = { task: 'tasks', experiment: 'experiments', paper: 'papers', milestone: 'milestones', journal: 'journal' };
   let editing = { type: null, id: null };
 
   function fieldHtml(f, val) {
@@ -543,11 +722,23 @@
       inner = `<select name="${f.k}">${f.options.map(([k, n]) =>
         `<option value="${esc(k)}" ${String(v) === String(k) ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>`;
     } else if (f.type === 'textarea') {
-      inner = `<textarea name="${f.k}">${esc(v)}</textarea>`;
+      inner = `<textarea name="${f.k}" ${f.rows ? `rows="${f.rows}"` : ''}>${esc(v)}</textarea>`;
     } else if (f.type === 'checkbox') {
       return `<div class="field"><label><input type="checkbox" name="${f.k}" ${v ? 'checked' : ''} style="width:auto;margin-right:6px">${esc(f.label)}</label></div>`;
+    } else if (f.type === 'mood') {
+      // 心情选择器：隐藏域存值，按钮负责切换
+      inner = `<input type="hidden" name="${f.k}" value="${esc(v)}">
+        <div class="mood-pick" data-mood-for="${f.k}">
+          ${MOODS.map(m => `<button type="button" data-mood="${m.k}" title="${esc(m.n)}"
+             class="${String(v) === m.k ? 'active' : ''}">${m.e}</button>`).join('')}
+        </div>`;
+    } else if (f.type === 'tasks') {
+      const opts = ['<option value="">（不关联）</option>'].concat(
+        DB.tasks.map(t => `<option value="${esc(t.id)}" ${String(v) === String(t.id) ? 'selected' : ''}>${esc((t.title || '(未命名)').slice(0, 40))}</option>`)
+      );
+      inner = `<select name="${f.k}">${opts.join('')}</select>`;
     } else {
-      inner = `<input type="${f.type}" name="${f.k}" value="${esc(v)}" ${f.required ? 'required' : ''}>`;
+      inner = `<input type="${f.type}" name="${f.k}" value="${esc(v)}" ${f.required ? 'required' : ''} ${f.placeholder ? `placeholder="${esc(f.placeholder)}"` : ''}>`;
     }
     return `<div class="field" ${f.full ? 'style="grid-column:1/-1"' : ''}><label>${esc(f.label)}${f.required ? ' *' : ''}</label>${inner}</div>`;
   }
@@ -646,8 +837,7 @@
         const obj = JSON.parse(reader.result);
         if (!obj || typeof obj !== 'object') throw new Error('格式不正确');
         if (!confirm('导入将覆盖当前所有数据，确定继续？')) return;
-        DB = Object.assign(emptyDB(), obj);
-        ['tasks', 'experiments', 'papers', 'milestones'].forEach(k => { if (!Array.isArray(DB[k])) DB[k] = []; });
+        DB = normalizeDB(obj);
         save(); renderAll();
         alert('导入成功！');
       } catch (err) {
@@ -684,6 +874,17 @@
         { id: uid(), title: '开题答辩', date: d(-6), done: true, note: '顺利通过。' },
         { id: uid(), title: '中期检查', date: d(20), done: false, note: '需准备进度 PPT。' },
         { id: uid(), title: '论文投递', date: d(60), done: false, note: '目标会议截稿前完成。' }
+      ],
+      journal: [
+        { id: uid(), date: d(0), mood: 'good', title: '方法章节开了个头',
+          body: '今天把方法部分的框架列出来了，主要是三块：问题定义、模型结构、训练策略。\n写的时候发现之前的 baseline 描述不够严谨，明天需要回头补一下公式。',
+          tags: ['写作', '方法'], linkTask: '' },
+        { id: uid(), date: d(-1), mood: 'tired', title: '调参调到怀疑人生',
+          body: 'lr 从 1e-4 扫到 1e-2，F1 波动只有 0.3 个点，怀疑是数据划分的问题。\n明天试试固定随机种子重跑一遍。',
+          tags: ['实验', '调参'], linkTask: '' },
+        { id: uid(), date: d(-2), mood: 'great', title: '消融实验跑通了',
+          body: '去掉注意力模块后准确率掉 4.2%，说明这个模块确实有用，可以写进论文了。',
+          tags: ['实验', '好结果'], linkTask: '' }
       ]
     };
   }
@@ -696,8 +897,10 @@
     renderExperiments();
     renderPaperFilters();
     renderPapers();
+    renderJournal();
     renderTimeline();
     renderStats();
+    renderSettings();
   }
   function renderActive() {
     const tab = currentTab();
@@ -712,6 +915,8 @@
     $$('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
     $$('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
     if (name === 'stats') renderStats();
+    if (name === 'settings') renderSettings();
+    if (name === 'journal') renderJournal();
   }
 
   /* ============================================================
@@ -791,6 +996,7 @@
     }
     hideAuthGate();
     await pullFromCloud();
+    applySyncedTheme();
     renderAll();
     $('#authSubmit').disabled = false;
   }
@@ -861,9 +1067,30 @@
     $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').hidden) closeModal(); });
 
+    // 心情选择器（弹窗内，事件委托）
+    $('#modalForm').addEventListener('click', e => {
+      const btn = e.target.closest('.mood-pick button[data-mood]');
+      if (!btn) return;
+      e.preventDefault();
+      const wrap = btn.closest('.mood-pick');
+      const hidden = wrap.parentElement.querySelector('input[type=hidden]');
+      const isSame = btn.classList.contains('active');
+      // 再次点击同一个表情 = 取消选择
+      Array.from(wrap.querySelectorAll('button')).forEach(b => b.classList.remove('active'));
+      if (hidden) hidden.value = isSame ? '' : btn.dataset.mood;
+      if (!isSame) btn.classList.add('active');
+    });
+
     // 搜索
     $('#expSearch').addEventListener('input', renderExperiments);
     $('#paperSearch').addEventListener('input', renderPapers);
+    $('#journalSearch').addEventListener('input', renderJournal);
+    $('#journalFilters').addEventListener('click', e => {
+      const c = e.target.closest('.chip');
+      if (!c) return;
+      journalFilter = c.dataset.jf;
+      renderJournal();
+    });
     $('#paperFilters').addEventListener('click', e => {
       const c = e.target.closest('.chip');
       if (!c) return;
@@ -885,6 +1112,61 @@
     });
     $('#btnClear').addEventListener('click', clearAll);
 
+    /* ---- 设置：主题 ---- */
+    $('#themeGrid').addEventListener('click', e => {
+      const opt = e.target.closest('.theme-opt');
+      if (!opt) return;
+      const key = opt.dataset.themeKey;
+      if (window.ThemeManager) window.ThemeManager.apply(key);
+      // 主题作为普通数据项随账号同步（存 settings.theme）
+      DB.settings = Object.assign({}, DB.settings, { theme: key });
+      save();
+      renderSettings();
+    });
+
+    /* ---- 设置：番茄钟 ---- */
+    const pushPomoCfg = () => {
+      if (!window.Pomodoro) return;
+      window.Pomodoro.setConfig({
+        focus: Number($('#setPomoFocus').value) || 25,
+        break: Number($('#setPomoBreak').value) || 5,
+        notify: $('#setPomoNotify').checked,
+        sound: $('#setPomoSound').checked,
+        autoBreak: $('#setPomoAutoBreak').checked
+      });
+    };
+    ['#setPomoFocus', '#setPomoBreak'].forEach(sel =>
+      $(sel).addEventListener('change', pushPomoCfg));
+    $('#setPomoNotify').addEventListener('change', async () => {
+      // 首次开启时申请通知权限
+      if ($('#setPomoNotify').checked && window.Notification && Notification.permission === 'default') {
+        try { await Notification.requestPermission(); } catch (_) {}
+      }
+      pushPomoCfg();
+    });
+    $('#setPomoSound').addEventListener('change', pushPomoCfg);
+    $('#setPomoAutoBreak').addEventListener('change', pushPomoCfg);
+
+    /* ---- 番茄钟开关 ---- */
+    $('#btnPomoToggle').addEventListener('click', () => {
+      if (!window.Pomodoro) return;
+      const panel = $('#pomo');
+      if (panel.hidden) window.Pomodoro.open();
+      else window.Pomodoro.close();
+    });
+
+    /* ---- 退出登录（设置里那个） ---- */
+    $('#btnLogout2').addEventListener('click', doLogout);
+
+    /* ---- 主题变化时重绘图表（颜色随主题变） ---- */
+    document.addEventListener('themechange', () => {
+      try { renderStats(); } catch (_) {}
+    });
+
+    // 供番茄钟读取任务列表
+    window.__getTasks = () => DB.tasks;
+    if (window.Pomodoro) window.Pomodoro.render();
+
     // 拖拽
     bindBoardDnD();
 
@@ -895,6 +1177,12 @@
   /* ============================================================
    * 启动
    * ============================================================ */
+  // 主题随账号同步：登录拉到数据后应用云端主题
+  function applySyncedTheme() {
+    const t = DB.settings && DB.settings.theme;
+    if (t && window.ThemeManager) window.ThemeManager.apply(t);
+  }
+
   async function init() {
     load();
     renderAll();
@@ -910,6 +1198,7 @@
     $('#userEmail').textContent = user.email;
     $('#userBox').hidden = false;
     await pullFromCloud();
+    applySyncedTheme();
     renderAll();
   }
   if (document.readyState === 'loading') {

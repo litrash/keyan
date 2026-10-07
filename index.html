@@ -20,15 +20,13 @@
     <button class="tab-btn active" data-tab="board">📋 进度看板</button>
     <button class="tab-btn" data-tab="experiments">🧫 实验记录</button>
     <button class="tab-btn" data-tab="papers">📚 论文文献</button>
+    <button class="tab-btn" data-tab="journal">📔 日记</button>
     <button class="tab-btn" data-tab="timeline">🗓 时间线</button>
     <button class="tab-btn" data-tab="stats">📈 统计</button>
+    <button class="tab-btn" data-tab="settings">⚙️ 设置</button>
   </nav>
   <div class="actions">
-    <button class="btn ghost" id="btnExport" title="导出全部数据为 JSON">⬇ 导出</button>
-    <button class="btn ghost" id="btnImport" title="从 JSON 导入">⬆ 导入</button>
-    <button class="btn ghost" id="btnCloudNow" title="立即与云端同步">☁ 同步</button>
-    <button class="btn ghost" id="btnDemo" title="载入示例数据（覆盖当前数据）">🎁 示例</button>
-    <button class="btn ghost danger" id="btnClear" title="清空所有数据">🗑 清空</button>
+    <button class="btn ghost" id="btnPomoToggle" title="番茄钟 / 计时器">⏱ 番茄钟</button>
     <div class="user-box" id="userBox" hidden>
       <span class="email" id="userEmail"></span>
       <button class="btn ghost" id="btnLogout" title="退出登录">退出</button>
@@ -73,6 +71,26 @@
     <div class="empty" id="paperEmpty" hidden>还没有文献记录。</div>
   </section>
 
+  <!-- ================= 日记 ================= -->
+  <section class="panel" id="panel-journal">
+    <div class="panel-head">
+      <h2>科研日记</h2>
+      <div class="head-tools">
+        <input type="text" class="search" id="journalSearch" placeholder="🔍 搜索标题 / 正文 / 标签">
+        <button class="btn primary" data-new="journal">＋ 写日记</button>
+      </div>
+    </div>
+
+    <div class="settings-block" style="padding:16px 20px">
+      <div class="j-stat" id="journalStat"></div>
+      <div class="j-heat" id="journalHeat"></div>
+    </div>
+
+    <div class="filters" id="journalFilters"></div>
+    <div class="journal-list" id="journalList"></div>
+    <div class="empty" id="journalEmpty" hidden>还没有日记，点右上角「写日记」记录今天。</div>
+  </section>
+
   <!-- ================= 时间线 ================= -->
   <section class="panel" id="panel-timeline">
     <div class="panel-head">
@@ -99,7 +117,104 @@
       <div class="chart-box wide"><h3>近 8 周完成任务数</h3><div class="chart-body"><canvas id="ch-weekly"></canvas></div></div>
     </div>
   </section>
+
+  <!-- ================= 设置 ================= -->
+  <section class="panel" id="panel-settings">
+    <div class="panel-head"><h2>设置</h2></div>
+
+    <div class="settings-block">
+      <h3>🎨 界面风格</h3>
+      <div class="hint">选择外观主题。主题会跟随账号同步到其他设备。</div>
+      <div class="theme-grid" id="themeGrid"></div>
+    </div>
+
+    <div class="settings-block">
+      <h3>⏱ 番茄钟</h3>
+      <div class="hint">默认专注时长与提醒方式。</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px">
+        <div class="field">
+          <label>专注时长（分钟）</label>
+          <select id="setPomoFocus">
+            <option value="15">15</option><option value="25">25</option>
+            <option value="35">35</option><option value="45">45</option><option value="60">60</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>休息时长（分钟）</label>
+          <select id="setPomoBreak">
+            <option value="3">3</option><option value="5">5</option><option value="10">10</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:14px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer">
+          <input type="checkbox" id="setPomoNotify" style="width:auto">
+          计时结束时用浏览器通知提醒（首次需授权）
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;margin-top:8px;cursor:pointer">
+          <input type="checkbox" id="setPomoSound" style="width:auto">
+          计时结束时播放提示音
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;margin-top:8px;cursor:pointer">
+          <input type="checkbox" id="setPomoAutoBreak" style="width:auto">
+          专注结束后自动开始休息倒计时
+        </label>
+      </div>
+    </div>
+
+    <div class="settings-block">
+      <h3>💾 数据管理</h3>
+      <div class="hint">导出备份 / 导入恢复 / 载入示例 / 清空数据。</div>
+      <div class="settings-actions">
+        <button class="btn" id="btnExport">⬇ 导出 JSON</button>
+        <button class="btn" id="btnImport">⬆ 导入 JSON</button>
+        <button class="btn ghost" id="btnCloudNow">☁ 立即同步</button>
+        <button class="btn ghost" id="btnDemo">🎁 载入示例数据</button>
+        <button class="btn ghost danger" id="btnClear">🗑 清空所有数据</button>
+      </div>
+      <div class="hint" style="margin:12px 0 0" id="settingsMeta"></div>
+    </div>
+
+    <div class="settings-block">
+      <h3>👤 账号</h3>
+      <div class="hint" id="settingsAccount">未登录</div>
+      <div class="settings-actions">
+        <button class="btn ghost danger" id="btnLogout2">退出登录</button>
+      </div>
+    </div>
+  </section>
 </main>
+
+<!-- ================= 番茄钟 ================= -->
+<button id="pomoFab" hidden title="展开番茄钟">⏱</button>
+<div id="pomo" hidden>
+  <div class="pomo-head">
+    <span class="title">⏱ 番茄钟</span>
+    <div class="hbtns">
+      <button id="pomoMin" title="最小化为悬浮球">—</button>
+      <button id="pomoClose" title="关闭">✕</button>
+    </div>
+  </div>
+  <div class="pomo-modes" id="pomoModes">
+    <button data-mode="focus" class="active">专注</button>
+    <button data-mode="break">休息</button>
+    <button data-mode="stopwatch">正计时</button>
+  </div>
+  <div class="pomo-bar"><i id="pomoBar"></i></div>
+  <div class="pomo-clock" id="pomoClock">25:00</div>
+  <div class="pomo-status" id="pomoStatus">准备开始</div>
+  <div class="pomo-btns">
+    <button class="btn primary" id="pomoStart">开始</button>
+    <button class="btn ghost" id="pomoReset">重置</button>
+  </div>
+  <div class="pomo-task">
+    <select id="pomoTaskSel"><option value="">（不关联任务）</option></select>
+  </div>
+  <div class="pomo-foot">
+    <span>今日番茄：<b id="pomoCount">0</b></span>
+    <span>专注 <b id="pomoMinutes">0</b> 分钟</span>
+  </div>
+</div>
 
 <footer class="foot">
   科研进度管理 · 数据保存在云端账号下，本机保留离线缓存
@@ -164,6 +279,8 @@
 <input type="file" id="fileInput" accept="application/json,.json" hidden>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="assets/theme.js"></script>
+<script src="assets/pomodoro.js"></script>
 <script src="assets/cloud.js"></script>
 <script src="assets/app.js"></script>
 </body>
