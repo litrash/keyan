@@ -1,0 +1,95 @@
+{
+  "tasks": [
+    {
+      "id": "demo-task-1",
+      "title": "完成文献综述初稿",
+      "stage": "doing",
+      "priority": "P1",
+      "due": "2026-10-12",
+      "tags": ["写作"],
+      "note": "目标 8000 字，覆盖近 5 年工作。",
+      "created": "2026-09-20T09:00:00.000Z"
+    },
+    {
+      "id": "demo-task-2",
+      "title": "补齐消融实验",
+      "stage": "todo",
+      "priority": "P0",
+      "due": "2026-10-09",
+      "tags": ["实验"],
+      "note": "需 GPU，等服务器排期。",
+      "created": "2026-09-20T09:00:00.000Z"
+    },
+    {
+      "id": "demo-task-3",
+      "title": "数据预处理脚本重构",
+      "stage": "blocked",
+      "priority": "P2",
+      "due": "2026-10-17",
+      "tags": ["工程"],
+      "note": "依赖上游数据接口。",
+      "created": "2026-09-20T09:00:00.000Z"
+    },
+    {
+      "id": "demo-task-4",
+      "title": "完成开题报告",
+      "stage": "done",
+      "priority": "P1",
+      "due": "2026-10-01",
+      "tags": ["写作"],
+      "note": "",
+      "created": "2026-09-20T09:00:00.000Z"
+    }
+  ],
+  "experiments": [
+    {
+      "id": "demo-exp-1",
+      "title": "基线模型对比实验",
+      "status": "ok",
+      "date": "2026-09-29",
+      "params": "lr=1e-3, batch=64, 5 folds",
+      "metric": "准确率",
+      "value": "92.4%",
+      "tags": ["baseline"],
+      "note": "优于 SOTA 1.2%，可作为主结果。"
+    },
+    {
+      "id": "demo-exp-2",
+      "title": "超参敏感性分析",
+      "status": "run",
+      "date": "2026-10-06",
+      "params": "lr ∈ {1e-4,1e-3,1e-2}",
+      "metric": "F1",
+      "value": "待跑",
+      "tags": ["调参"],
+      "note": "关注 lr 对收敛影响。"
+    }
+  ],
+  "papers": [
+    {
+      "id": "demo-paper-1",
+      "title": "Attention Is All You Need",
+      "authors": "Vaswani et al.",
+      "venue": "NeurIPS",
+      "status": "read",
+      "year": "2017",
+      "url": "https://arxiv.org/abs/1706.03762",
+      "note": "Transformer 基础，重点引用于方法章节。"
+    },
+    {
+      "id": "demo-paper-2",
+      "title": "本课题主论文",
+      "authors": "我",
+      "venue": "目标: CVPR",
+      "status": "writing",
+      "year": "2026",
+      "url": "",
+      "note": "框架已定，2 周内完成方法章节。"
+    }
+  ],
+  "milestones": [
+    { "id": "demo-ms-1", "title": "开题答辩", "date": "2026-10-01", "done": true, "note": "顺利通过。" },
+    { "id": "demo-ms-2", "title": "中期检查", "date": "2026-10-27", "done": false, "note": "需准备进度 PPT。" },
+    { "id": "demo-ms-3", "title": "论文投递", "date": "2026-12-06", "done": false, "note": "目标会议截稿前完成。" }
+  ]
+}
