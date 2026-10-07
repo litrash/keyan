@@ -275,3 +275,58 @@ main { max-width: 1400px; margin: 0 auto; padding: 24px 26px 60px; }
   .field-row { grid-template-columns: 1fr; }
   .search { width: 100%; }
 }
+
+/* ============================================================
+   账号 / 云端同步
+   ============================================================ */
+/* 登录/注册弹层 */
+#authGate {
+  position: fixed; inset: 0; z-index: 400;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+#authGate[hidden] { display: none; }
+.auth-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 18px;
+  box-shadow: 0 20px 60px rgba(16, 24, 40, .16);
+  width: 420px; max-width: 100%; padding: 32px 30px;
+}
+.auth-card .logo { font-size: 34px; text-align: center; }
+.auth-card h2 { font-size: 20px; text-align: center; margin: 6px 0 4px; }
+.auth-card .sub { font-size: 13px; color: var(--muted); text-align: center; margin-bottom: 22px; }
+.auth-card .field { margin-bottom: 14px; }
+.auth-card input[type=text], .auth-card input[type=email], .auth-card input[type=password] {
+  padding: 11px 13px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg); color: var(--text); font-size: 14px;
+  outline: none; width: 100%; font-family: inherit;
+}
+.auth-card input:focus { border-color: var(--accent); }
+.auth-card .row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+.auth-card .row input { width: auto; }
+.auth-card .btn { width: 100%; padding: 11px; font-size: 14px; }
+.auth-msg { font-size: 13px; margin-bottom: 12px; min-height: 18px; }
+.auth-msg.err { color: var(--red); }
+.auth-msg.ok { color: var(--green); }
+.auth-switch { text-align: center; font-size: 13px; color: var(--muted); margin-top: 16px; }
+.auth-switch a { cursor: pointer; font-weight: 600; }
+.auth-note {
+  font-size: 12px; color: var(--muted); text-align: center; margin-top: 18px;
+  padding-top: 16px; border-top: 1px solid var(--border); line-height: 1.7;
+}
+
+/* 顶栏账号区 */
+.user-box { display: flex; align-items: center; gap: 8px; padding-left: 10px; border-left: 1px solid var(--border); }
+.user-box .email { font-size: 13px; color: var(--muted); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 同步状态指示 */
+#syncState { font-size: 12px; margin-left: 8px; }
+#syncState.saving { color: var(--orange); }
+#syncState.saved  { color: var(--green); }
+#syncState.error  { color: var(--red); }
+#syncState.offline{ color: var(--muted); }
+
+.btn.badge-dot { position: relative; }
+.btn.badge-dot::after {
+  content: ''; position: absolute; top: 4px; right: 4px;
+  width: 7px; height: 7px; border-radius: 50%; background: var(--orange);
+}

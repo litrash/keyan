@@ -1,6 +1,7 @@
 # 科研进度管理 · Research Progress Manager
 
-一个**纯前端、零后端、零依赖安装**的科研进度管理小工具。所有数据保存在浏览器 `localStorage`，随开随用，可一键部署到 GitHub Pages。
+一个科研进度管理小工具，支持**账号登录 + 云端同步**：在任意电脑登录同一账号，即可看到自己的科研进度。
+前端是纯静态页面（可部署到 GitHub Pages），数据通过后端 API 存到云端，本机保留离线缓存。
 
 > 适合研究生 / 科研人员管理课题任务、实验记录、文献与投稿进度、里程碑时间线。
 
@@ -13,65 +14,86 @@
 | 📚 **论文文献** | 管理文献与自己的论文，覆盖「构思 → 精读 → 撰写 → 投稿 → 返修 → 接收/被拒」全流程，按状态筛选 |
 | 🗓 **时间线** | 里程碑时间轴 + 未来 30 天「近期截止」自动汇总 |
 | 📈 **统计** | 任务阶段分布、优先级分布、实验进度、文献状态、近 8 周完成任务趋势（Chart.js 图表） |
+| ☁️ **账号与云同步** | 邮箱注册 / 登录，每个账号**只能看到自己的数据**；离线可用，联网自动同步 |
 | 💾 **数据管理** | 导出 / 导入 JSON 备份，一键载入示例数据，一键清空 |
 
+## 🔐 账号与数据隔离
+
+- 邮箱 + 密码注册，密码经 **PBKDF2-SHA256 加盐哈希**（10 万次迭代）后存储，**服务器不保存明文**
+- 登录后签发 JWT（7 天有效），所有数据读写以令牌中的用户 ID 为准
+- **每个账号的数据在服务端独立存储**，即使拿到别人的令牌也无法读取或覆盖其数据
+- 退出登录后旧令牌立即失效
+
+## ☁️ 云端同步
+
+- **离线优先**：断网时照常增删改，数据落在本机缓存，联网后自动补推
+- 多设备冲突时（同一账号在两台电脑同时改）会提示你选择保留哪一份，**不会静默丢数据**
+- 首次用空账号登录时，若本机已有数据会询问是否上传，避免误覆盖
+
 ## 🚀 本地使用
-
-无需安装任何依赖，二选一：
-
-**方式一：直接打开**
-
-双击 `index.html` 即可在浏览器中使用。
-
-**方式二：本地起服务（推荐，避免个别浏览器的 file:// 限制）**
 
 ```bash
 # Python 3
 python -m http.server 8080
-# 然后访问 http://localhost:8080
+# 访问 http://localhost:8080
 ```
 
-## 🌐 部署到 GitHub Pages
+> 需要先部署后端（见下）并把 `assets/cloud.js` 里的 `API_BASE` 指向你的 Worker 地址。
+
+## 🌐 部署
+
+### 1. 部署后端（Cloudflare Worker + D1）
+
+后端代码在 `research-cloud/` 目录，完整步骤见该目录的 `README.md`，简要：
 
 ```bash
-git init
-git add .
-git commit -m "feat: 科研进度管理初始版本"
-git branch -M main
-git remote add origin https://github.com/<你的用户名>/<仓库名>.git
-git push -u origin main
+cd research-cloud
+npm install
+npx wrangler login
+npx wrangler d1 create research-progress    # 把 database_id 填进 wrangler.toml
+npm run migrate:remote
+npx wrangler secret put JWT_SECRET          # 设置会话签名密钥
+npm run deploy
 ```
 
-推送后，在 GitHub 仓库页面进入 **Settings → Pages**：
+### 2. 配置前端指向后端
 
-- **Source** 选择 `Deploy from a branch`
-- **Branch** 选择 `main`，目录选 `/ (root)`
-- 保存，稍等片刻即可通过 `https://<你的用户名>.github.io/<仓库名>/` 访问
+编辑 `assets/cloud.js`：
 
-> 本项目已内置 GitHub Actions 工作流 `.github/workflows/pages.yml`。如果仓库的 **Settings → Pages → Source** 选择 **GitHub Actions**，则每次 push 会自动部署，无需手动选分支。
+```js
+const API_BASE = window.RESEARCH_API_BASE || 'https://<你的-worker>.workers.dev';
+```
+
+### 3. 部署前端到 GitHub Pages
+
+```bash
+git add .
+git commit -m "feat: 账号系统 + 云端同步"
+git push
+```
+
+推送后，在 GitHub 仓库 **Settings → Pages**：Source 选 `Deploy from a branch`，分支 `main`、目录 `/ (root)`。
+
+> 若仓库 **Settings → Pages → Source** 选 **GitHub Actions**，则每次 push 会自动部署。
+> 同时记得把 Worker 的 `ALLOWED_ORIGINS` 设成 `https://<你的用户名>.github.io`。
 
 ## 📁 目录结构
 
 ```
 科研进度管理/
-├── index.html              # 页面结构
+├── index.html              # 页面结构（含登录/注册界面）
 ├── assets/
-│   ├── style.css           # 样式（含深色模式、响应式）
-│   └── app.js              # 全部应用逻辑（数据层 / 渲染 / 图表 / 导入导出）
+│   ├── style.css           # 样式（含深色模式、响应式、登录界面）
+│   ├── cloud.js            # 云端 API 封装（注册/登录/同步）
+│   └── app.js              # 应用逻辑（数据层 / 渲染 / 图表 / 导入导出）
 ├── data/
 │   └── sample.json         # 示例数据（可「导入」体验）
 ├── .github/workflows/
 │   └── pages.yml           # GitHub Pages 自动部署
-├── .gitignore
-├── LICENSE
 └── README.md
 ```
 
-## ⚠️ 数据说明
-
-- 数据仅保存在**当前浏览器**的 `localStorage` 中，**不会上传到任何服务器**。
-- 清除浏览器数据、更换浏览器/设备会丢失数据 —— 请定期用「⬇ 导出」备份，换设备时「⬆ 导入」。
-- GitHub Pages 部署的是**页面本身**，你在网页上录入的数据不会进入仓库。
+后端另在 `research-cloud/`（Worker 源码、D1 建表、部署文档）。
 
 ## 🛠 自定义
 

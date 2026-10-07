@@ -61,6 +61,17 @@
   const emptyDB = () => ({ tasks: [], experiments: [], papers: [], milestones: [] });
   let DB = emptyDB();
 
+  /* ---- 云端同步状态 ---- */
+  const Cloud = window.CloudAPI || null;
+  let dirty = false;        // 本地有未推送的改动
+  let syncTimer = null;
+  let syncing = false;
+
+  function setSyncState(text, cls) {
+    const el = $('#syncState');
+    if (el) { el.textContent = text ? '· ' + text : ''; el.className = cls || ''; }
+  }
+
   function load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -72,8 +83,9 @@
           if (!Array.isArray(DB[k])) DB[k] = [];
         });
       } else {
-        DB = demoData();
-        save();
+        // 首次访问：留空，等登录后从云端拉取。
+        // 不再自动灌入示例数据——否则新账号会把示例数据当成自己的进度推到云端。
+        DB = emptyDB();
       }
     } catch (e) {
       console.warn('读取本地数据失败，使用空数据', e);
@@ -81,15 +93,123 @@
     }
   }
 
-  let saveTimer = null;
-  function save() {
+  /** 仅写本地缓存（离线优先，不触发云端推送） */
+  function saveLocal() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(DB));
-      flashHint('已自动保存 ' + new Date().toLocaleTimeString('zh-CN', { hour12: false }));
     } catch (e) {
-      flashHint('保存失败：' + e.message);
+      flashHint('本地缓存失败：' + e.message);
     }
   }
+
+  let saveTimer = null;
+  /**
+   * 保存：先落本地缓存，再排队推送到云端。
+   * 离线时仅本地生效，联网后由 syncNow 自动补推。
+   */
+  function save() {
+    saveLocal();
+    flashHint('已保存 ' + new Date().toLocaleTimeString('zh-CN', { hour12: false }));
+    if (Cloud && Cloud.isLoggedIn()) {
+      dirty = true;
+      setSyncState('待同步…', 'saving');
+      schedulePush();
+    } else {
+      setSyncState('仅本地', 'offline');
+    }
+  }
+
+  function schedulePush(delay) {
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => { syncNow(); }, delay == null ? 800 : delay);
+  }
+
+  /** 把本地数据推送到云端；遇到冲突则以云端为准提示用户 */
+  async function syncNow(opts) {
+    if (!Cloud || !Cloud.isLoggedIn() || syncing) return;
+    syncing = true;
+    setSyncState('同步中…', 'saving');
+    try {
+      const res = await Cloud.push(DB, { baseRevision: Cloud.store.revision });
+      if (res.ok) {
+        dirty = false;
+        setSyncState('已同步到云端', 'saved');
+        setTimeout(() => {
+          const el = $('#syncState');
+          if (el && el.textContent.includes('已同步')) el.textContent = '';
+        }, 2500);
+      } else if (res.conflict) {
+        // 其他设备改了数据：拉取云端版本覆盖本地，避免静默丢数据
+        const remote = res.remote;
+        const useRemote = opts && opts.forceRemote
+          ? true
+          : confirm('云端数据已被其他设备更新。\n\n点「确定」用云端版本覆盖本机，点「取消」用本机版本覆盖云端。');
+        if (useRemote) {
+          DB = Object.assign(emptyDB(), remote.payload);
+          ['tasks', 'experiments', 'papers', 'milestones'].forEach(k => { if (!Array.isArray(DB[k])) DB[k] = []; });
+          Cloud.store.revision = remote.revision;
+          saveLocal();
+          renderAll();
+          dirty = false;
+          setSyncState('已采用云端数据', 'saved');
+        } else {
+          const r2 = await Cloud.push(DB, { baseRevision: remote.revision });
+          if (r2.ok) { dirty = false; setSyncState('已用本机覆盖云端', 'saved'); }
+        }
+      }
+    } catch (e) {
+      if (e.status === 401) {
+        setSyncState('登录已过期', 'error');
+        showAuthGate();
+      } else {
+        setSyncState('离线，稍后自动重试', 'offline');
+        schedulePush(15000);
+      }
+    } finally {
+      syncing = false;
+    }
+  }
+
+  /** 登录后拉取云端数据；若云端为空而本地有数据，则把本地推上去 */
+  async function pullFromCloud() {
+    if (!Cloud || !Cloud.isLoggedIn()) return;
+    setSyncState('读取云端…', 'saving');
+    try {
+      const d = await Cloud.pull();
+      const KEYS = ['tasks', 'experiments', 'papers', 'milestones'];
+      const remoteEmpty = KEYS.every(k => !Array.isArray(d.payload[k]) || d.payload[k].length === 0);
+      const localHasData = KEYS.some(k => Array.isArray(DB[k]) && DB[k].length > 0);
+
+      // 只在「账号是全新的（revision 0 且从未写过）」且「本机有数据」时，
+      // 才把本机数据迁移上云。这是老用户第一次注册账号的场景。
+      // revision > 0 说明云端已有内容，绝不能拿本机数据覆盖。
+      if (remoteEmpty && localHasData && d.revision === 0) {
+        const migrate = confirm(
+          '检测到本机存在科研数据，而云端账号是空的。\n\n' +
+          '点「确定」把本机数据上传到云端（推荐）。\n' +
+          '点「取消」放弃本机数据，从空数据开始。'
+        );
+        if (migrate) {
+          dirty = true;
+          await syncNow();
+          renderAll();
+          return;
+        }
+      }
+
+      // 默认：以云端为准
+      DB = Object.assign(emptyDB(), d.payload);
+      KEYS.forEach(k => { if (!Array.isArray(DB[k])) DB[k] = []; });
+      saveLocal();
+      renderAll();
+      dirty = false;
+      setSyncState(remoteEmpty ? '云端暂无数据' : '已从云端载入', 'saved');
+    } catch (e) {
+      if (e.status === 401) { setSyncState('登录已过期', 'error'); showAuthGate(); }
+      else setSyncState('离线，使用本地缓存', 'offline');
+    }
+  }
+
   function flashHint(text) {
     const el = $('#saveHint');
     if (!el) return;
@@ -595,9 +715,123 @@
   }
 
   /* ============================================================
+   * 账号界面（登录 / 注册）
+   * ============================================================ */
+  let authMode = 'login'; // 'login' | 'register'
+
+  function showAuthGate() {
+    const gate = $('#authGate');
+    if (!gate) return;
+    gate.hidden = false;
+    setAuthMode('login');
+    setTimeout(() => { const e = $('#authEmail'); if (e) e.focus(); }, 60);
+  }
+
+  function hideAuthGate() {
+    const gate = $('#authGate');
+    if (gate) gate.hidden = true;
+  }
+
+  function setAuthMode(mode) {
+    authMode = mode;
+    const isReg = mode === 'register';
+    $('#authTitle').textContent = isReg ? '注册科研进度管理' : '登录科研进度管理';
+    $('#authSub').textContent = isReg
+      ? '创建账号后，进度会保存到云端'
+      : '登录后可在任意电脑访问你的科研进度';
+    $('#authConfirmWrap').hidden = !isReg;
+    $('#authSubmit').textContent = isReg ? '注册并登录' : '登录';
+    $('#authSwitchText').textContent = isReg ? '已有账号？' : '还没有账号？';
+    $('#authSwitchLink').textContent = isReg ? '去登录' : '立即注册';
+    $('#authPassword').setAttribute('autocomplete', isReg ? 'new-password' : 'current-password');
+    authMsg('');
+    $('#authForm').reset();
+  }
+
+  function authMsg(text, kind) {
+    const el = $('#authMsg');
+    if (!el) return;
+    el.textContent = text || '';
+    el.className = 'auth-msg' + (kind ? ' ' + kind : '');
+  }
+
+  async function submitAuth(e) {
+    e.preventDefault();
+    if (!Cloud) { authMsg('同步模块未加载', 'err'); return; }
+
+    const email = ($('#authEmail').value || '').trim();
+    const pw = $('#authPassword').value || '';
+    const remember = $('#authRemember').checked;
+
+    if (!email) { authMsg('请输入邮箱', 'err'); return; }
+    if (authMode === 'register') {
+      if (pw.length < 8) { authMsg('密码至少 8 位', 'err'); return; }
+      if (pw !== ($('#authPassword2').value || '')) { authMsg('两次输入的密码不一致', 'err'); return; }
+    } else if (!pw) { authMsg('请输入密码', 'err'); return; }
+
+    const btn = $('#authSubmit');
+    btn.disabled = true;
+    authMsg(authMode === 'register' ? '正在创建账号…' : '正在登录…');
+    try {
+      if (authMode === 'register') await Cloud.register(email, pw, remember);
+      else await Cloud.login(email, pw, remember);
+      authMsg('成功，正在载入数据…', 'ok');
+      await afterLogin();
+    } catch (err) {
+      authMsg(err.message || '操作失败', 'err');
+      btn.disabled = false;
+    }
+  }
+
+  async function afterLogin() {
+    const u = Cloud.currentUser();
+    if (u) {
+      $('#userEmail').textContent = u.email;
+      $('#userBox').hidden = false;
+    }
+    hideAuthGate();
+    await pullFromCloud();
+    renderAll();
+    $('#authSubmit').disabled = false;
+  }
+
+  async function doLogout() {
+    if (!confirm('退出登录？本机缓存会保留，重新登录即可继续使用。')) return;
+    dirty = false;
+    clearTimeout(syncTimer);
+    await Cloud.logout();
+    $('#userBox').hidden = true;
+    $('#userEmail').textContent = '';
+    setSyncState('');
+    DB = emptyDB();
+    saveLocal();
+    renderAll();
+    showAuthGate();
+  }
+
+  /* ============================================================
    * 事件绑定
    * ============================================================ */
   function bind() {
+    // 账号
+    $('#authForm').addEventListener('submit', submitAuth);
+    $('#authSwitchLink').addEventListener('click', () => setAuthMode(authMode === 'login' ? 'register' : 'login'));
+    $('#btnLogout').addEventListener('click', doLogout);
+    $('#btnCloudNow').addEventListener('click', () => syncNow({ forceRemote: false }));
+
+    // 联网后自动补推
+    window.addEventListener('online', () => { setSyncState('网络已恢复', 'saved'); if (dirty) syncNow(); });
+    window.addEventListener('offline', () => setSyncState('离线，改动会暂存本机', 'offline'));
+
+    // 关闭页面前尽量把改动推上去
+    window.addEventListener('beforeunload', (e) => {
+      if (dirty && Cloud && Cloud.isLoggedIn()) {
+        // 用 sendBeacon 不可靠（需要鉴权头），退化为提示
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
+
     $('#tabBar').addEventListener('click', e => {
       const b = e.target.closest('.tab-btn');
       if (b) switchTab(b.dataset.tab);
@@ -661,10 +895,22 @@
   /* ============================================================
    * 启动
    * ============================================================ */
-  function init() {
+  async function init() {
     load();
     renderAll();
     bind();
+
+    // 未登录则先要求登录，登录后才能进入主界面
+    if (!Cloud || !Cloud.isLoggedIn()) {
+      showAuthGate();
+      return;
+    }
+    const user = await Cloud.checkSession();
+    if (!user) { showAuthGate(); return; }
+    $('#userEmail').textContent = user.email;
+    $('#userBox').hidden = false;
+    await pullFromCloud();
+    renderAll();
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);

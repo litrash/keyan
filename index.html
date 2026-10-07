@@ -26,8 +26,13 @@
   <div class="actions">
     <button class="btn ghost" id="btnExport" title="导出全部数据为 JSON">⬇ 导出</button>
     <button class="btn ghost" id="btnImport" title="从 JSON 导入">⬆ 导入</button>
+    <button class="btn ghost" id="btnCloudNow" title="立即与云端同步">☁ 同步</button>
     <button class="btn ghost" id="btnDemo" title="载入示例数据（覆盖当前数据）">🎁 示例</button>
     <button class="btn ghost danger" id="btnClear" title="清空所有数据">🗑 清空</button>
+    <div class="user-box" id="userBox" hidden>
+      <span class="email" id="userEmail"></span>
+      <button class="btn ghost" id="btnLogout" title="退出登录">退出</button>
+    </div>
   </div>
 </header>
 
@@ -97,9 +102,47 @@
 </main>
 
 <footer class="foot">
-  科研进度管理 · 纯本地静态页面 · 数据保存在浏览器 localStorage
+  科研进度管理 · 数据保存在云端账号下，本机保留离线缓存
   <span id="saveHint"></span>
+  <span id="syncState"></span>
 </footer>
+
+<!-- ================= 登录 / 注册 ================= -->
+<div id="authGate" hidden>
+  <div class="auth-card">
+    <div class="logo">🧪</div>
+    <h2 id="authTitle">登录科研进度管理</h2>
+    <div class="sub" id="authSub">登录后可在任意电脑访问你的科研进度</div>
+    <div class="auth-msg" id="authMsg"></div>
+    <form id="authForm">
+      <div class="field">
+        <label>邮箱</label>
+        <input type="email" id="authEmail" autocomplete="username" placeholder="you@example.com" required>
+      </div>
+      <div class="field">
+        <label>密码</label>
+        <input type="password" id="authPassword" autocomplete="current-password" placeholder="至少 8 位" required>
+      </div>
+      <div class="field" id="authConfirmWrap" hidden>
+        <label>确认密码</label>
+        <input type="password" id="authPassword2" autocomplete="new-password" placeholder="再输入一次">
+      </div>
+      <div class="row">
+        <input type="checkbox" id="authRemember">
+        <label for="authRemember">记住我（关闭浏览器后仍保持登录）</label>
+      </div>
+      <button type="submit" class="btn primary" id="authSubmit">登录</button>
+    </form>
+    <div class="auth-switch">
+      <span id="authSwitchText">还没有账号？</span>
+      <a id="authSwitchLink">立即注册</a>
+    </div>
+    <div class="auth-note">
+      🔒 密码经 PBKDF2 加盐哈希后存储，服务器不保存明文<br>
+      每个账号只能看到自己的科研进度
+    </div>
+  </div>
+</div>
 
 <!-- ================= 编辑弹窗 ================= -->
 <div class="modal" id="modal" hidden>
@@ -121,6 +164,7 @@
 <input type="file" id="fileInput" accept="application/json,.json" hidden>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="assets/cloud.js"></script>
 <script src="assets/app.js"></script>
 </body>
 </html>
