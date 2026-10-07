@@ -528,6 +528,205 @@
   }
 
   /* ============================================================
+   * 社区共享：最新 API 贡献
+   * 数据来自后端 /api/community（全站共享，非当前账号私有）
+   * ============================================================ */
+  let capiItems = [];            // 服务端返回的条目
+  let capiStamp = -1;            // 服务端数据版本，用于判断是否需要重绘
+  let capiFilter = 'all';        // all | mine | tag:xxx
+  let capiTimer = null;          // 实时轮询
+  let capiEditId = null;         // 正在编辑的条目 id
+  let capiFormMode = 'create';   // create | edit
+
+  const capiRevealed = new Set(); // 本次会话已展开密钥的条目 id
+
+  /** 展示用的相对时间 */
+  function relTime(iso) {
+    if (!iso) return '';
+    const t = Date.parse(iso);
+    if (isNaN(t)) return '';
+    const diff = Date.now() - t;
+    const min = Math.floor(diff / 60000);
+    if (min < 1) return '刚刚';
+    if (min < 60) return `${min} 分钟前`;
+    const h = Math.floor(min / 60);
+    if (h < 24) return `${h} 小时前`;
+    const d = Math.floor(h / 24);
+    if (d < 30) return `${d} 天前`;
+    return new Date(t).toLocaleDateString('zh-CN');
+  }
+
+  /** 密钥打码：保留前后各 4 位，中间用点代替 */
+  function maskKey(k) {
+    if (!k) return '';
+    if (k.length <= 8) return '•'.repeat(k.length);
+    return k.slice(0, 4) + '•'.repeat(Math.min(20, k.length - 8)) + k.slice(-4);
+  }
+
+  function renderCommunity() {
+    const q = ($('#capiSearch').value || '').trim().toLowerCase();
+    let list = capiItems.slice();
+
+    if (capiFilter === 'mine') list = list.filter(x => x.mine);
+    else if (capiFilter.indexOf('tag:') === 0) {
+      const tag = capiFilter.slice(4);
+      list = list.filter(x => (x.tags || []).includes(tag));
+    }
+    if (q) {
+      list = list.filter(x =>
+        (x.name || '').toLowerCase().includes(q) ||
+        (x.base_url || '').toLowerCase().includes(q) ||
+        (x.model || '').toLowerCase().includes(q) ||
+        (x.note || '').toLowerCase().includes(q) ||
+        (x.tags || []).join(' ').toLowerCase().includes(q));
+    }
+
+    $('#capiCount').textContent = capiItems.length;
+    $('#capiEmpty').hidden = list.length > 0;
+    if (!list.length) {
+      $('#capiEmpty').textContent = capiItems.length
+        ? '没有符合条件的条目。'
+        : '还没有人贡献 API，点右上角「贡献 API」添加第一条。';
+    }
+
+    $('#capiList').innerHTML = list.map(x => {
+      const revealed = capiRevealed.has(x.id);
+      const keyBlock = x.api_key
+        ? (revealed
+            ? `<div class="capi-key-wrap"><code>${esc(x.api_key)}</code>
+                 <button class="capi-reveal" data-capi-hide="${x.id}">隐藏</button></div>`
+            : `<div class="capi-key-wrap"><code>${esc(maskKey(x.api_key))}</code>
+                 <button class="capi-reveal" data-capi-show="${x.id}">显示</button></div>`)
+        : `<span style="color:var(--muted);font-size:12.5px">（无需密钥）</span>`;
+
+      const tags = (x.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('');
+      const author = (x.authorEmail || '').split('@')[0] || '匿名';
+      const canEdit = !!x.mine;
+
+      return `<div class="capi-item ${canEdit ? 'mine' : ''}">
+        <div class="capi-head">
+          <span class="capi-name">${esc(x.name)}</span>
+          ${canEdit ? '<span class="capi-badge">我贡献的</span>' : ''}
+          <span class="capi-when">${esc(relTime(x.updatedAt))}</span>
+        </div>
+        ${x.base_url ? `<div class="capi-row"><span class="k">地址</span><code>${esc(x.base_url)}</code></div>` : ''}
+        ${x.model ? `<div class="capi-row"><span class="k">模型</span><span>${esc(x.model)}</span></div>` : ''}
+        <div class="capi-row"><span class="k">密钥</span>${keyBlock}</div>
+        ${x.note ? `<div class="capi-note">${esc(x.note)}</div>` : ''}
+        ${tags ? `<div class="capi-tags" style="margin-top:9px">${tags}</div>` : ''}
+        <div class="capi-foot">
+          <span class="capi-author">👤 ${esc(author)}</span>
+          <span class="spacer"></span>
+          ${canEdit ? `<button class="btn ghost" data-capi-edit="${x.id}">编辑</button>
+                       <button class="btn ghost danger" data-capi-del="${x.id}">删除</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+
+    renderCapiFilters();
+  }
+
+  function renderCapiFilters() {
+    const tagCounts = {};
+    capiItems.forEach(x => (x.tags || []).forEach(t => { tagCounts[t] = (tagCounts[t] || 0) + 1; }));
+    const mineN = capiItems.filter(x => x.mine).length;
+    const chips = [
+      `<button class="chip ${capiFilter === 'all' ? 'active' : ''}" data-capi-f="all">全部 (${capiItems.length})</button>`,
+      `<button class="chip ${capiFilter === 'mine' ? 'active' : ''}" data-capi-f="mine">我贡献的 (${mineN})</button>`
+    ];
+    Object.keys(tagCounts).sort().forEach(t => {
+      chips.push(`<button class="chip ${capiFilter === 'tag:' + t ? 'active' : ''}" data-capi-f="tag:${esc(t)}">#${esc(t)} (${tagCounts[t]})</button>`);
+    });
+    $('#capiFilters').innerHTML = chips.join('');
+  }
+
+  /** 从服务端拉取；stamp 未变则不重绘，避免打断正在展开的密钥 */
+  async function fetchCommunity(force) {
+    if (!Cloud || !Cloud.isLoggedIn()) return;
+    try {
+      const d = await Cloud.listCommunity();
+      const changed = force || d.stamp !== capiStamp || (d.items || []).length !== capiItems.length;
+      capiStamp = d.stamp;
+      capiItems = d.items || [];
+      const live = $('#capiLive');
+      if (live) live.textContent = '实时同步中';
+      if (changed) renderCommunity();
+    } catch (e) {
+      const live = $('#capiLive');
+      if (live) live.textContent = e.status === 401 ? '登录已过期' : '离线，稍后重试';
+      // 404 说明后端还没部署新接口，给出明确提示
+      if (e.status === 404) {
+        $('#capiEmpty').hidden = false;
+        $('#capiEmpty').textContent = '后端尚未部署社区接口，请重新部署 Worker 后再试。';
+      }
+    }
+  }
+
+  /** 轮询实现「实时」：页面可见时每 12 秒拉一次，切到本页时立即拉一次 */
+  function startCommunityPolling() {
+    stopCommunityPolling();
+    capiTimer = setInterval(() => {
+      if (document.hidden) return;
+      if (currentTab() === 'community') fetchCommunity(false);
+    }, 12000);
+  }
+  function stopCommunityPolling() {
+    if (capiTimer) { clearInterval(capiTimer); capiTimer = null; }
+  }
+
+  /* ---- 弹窗里对社区条目的读写 ---- */
+  function openCapiForm(id) {
+    const item = id ? capiItems.find(x => x.id === id) : null;
+    capiFormMode = item ? 'edit' : 'create';
+    capiEditId = item ? item.id : null;
+    openModal('capi', null);   // 复用通用弹窗渲染
+    if (item) {
+      // 把服务端数据回填进表单
+      const f = $('#modalForm');
+      const set = (k, v) => { const el = f.elements[k]; if (el) el.value = v == null ? '' : v; };
+      set('name', item.name); set('base_url', item.base_url);
+      set('model', item.model); set('api_key', item.api_key);
+      set('note', item.note); set('tagsText', (item.tags || []).join(', '));
+      $('#modalTitle').textContent = '编辑 API 贡献';
+    } else {
+      $('#modalTitle').textContent = '贡献 API';
+    }
+    $('#btnDelete').hidden = true;  // 社区条目的删除走列表上的按钮，避免误触
+  }
+
+  async function saveCapiFromModal(formData) {
+    const body = {
+      name: formData.name,
+      base_url: formData.base_url,
+      model: formData.model,
+      api_key: formData.api_key,
+      note: formData.note,
+      tags: (formData.tagsText || '').split(/[,，;；]/).map(s => s.trim()).filter(Boolean)
+    };
+    if (capiFormMode === 'edit' && capiEditId) {
+      await Cloud.updateCommunity(capiEditId, body);
+      flashHint('已更新');
+    } else {
+      await Cloud.createCommunity(body);
+      flashHint('已贡献，所有用户可见');
+    }
+    await fetchCommunity(true);
+  }
+
+  async function deleteCapiItem(id) {
+    const item = capiItems.find(x => x.id === id);
+    if (!confirm(`确定删除「${item ? item.name : '该条目'}」？此操作不可撤销。`)) return;
+    try {
+      await Cloud.deleteCommunity(id);
+      capiRevealed.delete(id);
+      await fetchCommunity(true);
+      flashHint('已删除');
+    } catch (e) {
+      alert(e.message || '删除失败');
+    }
+  }
+
+  /* ============================================================
    * 渲染：时间线
    * ============================================================ */
   function renderTimeline() {
@@ -699,6 +898,18 @@
         { k: 'body', label: '正文', type: 'textarea', full: true, rows: 9 }
       ],
       defaults: { date: todayISO(), mood: '', title: '', linkTask: '', tagsText: '', body: '' }
+    },
+    capi: {
+      title: 'API 贡献',
+      fields: [
+        { k: 'name', label: 'API 名称', type: 'text', required: true, full: true, placeholder: '例如：某某中转 / GPT-4o 公益站' },
+        { k: 'base_url', label: '接口地址', type: 'text', full: true, placeholder: 'https://api.example.com/v1' },
+        { k: 'model', label: '支持模型', type: 'text', placeholder: 'gpt-4o, claude-3-5-sonnet' },
+        { k: 'api_key', label: '密钥（可选）', type: 'text', placeholder: '留空表示无需密钥' },
+        { k: 'tagsText', label: '标签（逗号分隔）', type: 'text', full: true, placeholder: '免费, 稳定, 高速' },
+        { k: 'note', label: '备注 / 可用性说明', type: 'textarea', full: true, rows: 4, placeholder: '是否稳定、限速、需要代理等' }
+      ],
+      defaults: { name: '', base_url: '', model: '', api_key: '', tagsText: '', note: '' }
     }
   };
 
@@ -747,7 +958,8 @@
     const schema = SCHEMAS[type];
     if (!schema) return;
     editing = { type, id: id || null };
-    const list = DB[DATA_KEY[type]];
+    // capi 是社区共享数据，不存在 DB 里，表单值由 openCapiForm 另行回填
+    const list = DATA_KEY[type] ? DB[DATA_KEY[type]] : [];
     const item = id ? list.find(x => x.id === id) : null;
     const src = item
       ? Object.assign({}, item, { tagsText: (item.tags || []).join(', ') })
@@ -767,7 +979,7 @@
     $('#modalForm').innerHTML = '';
   }
 
-  function saveModal(e) {
+  async function saveModal(e) {
     e.preventDefault();
     const { type, id } = editing;
     if (!type) return;
@@ -779,6 +991,20 @@
       if (!el) return;
       obj[f.k] = f.type === 'checkbox' ? el.checked : el.value.trim();
     });
+
+    // 社区 API 贡献：走独立接口（共享数据，不进本地 DB）
+    if (type === 'capi') {
+      if (!obj.name) { alert('请填写 API 名称'); return; }
+      try {
+        await saveCapiFromModal(obj);
+        closeModal();
+        renderCommunity();
+      } catch (err) {
+        alert(err.message || '保存失败');
+      }
+      return;
+    }
+
     // 标签处理
     const tags = (obj.tagsText || '').split(/[,，;；]/).map(s => s.trim()).filter(Boolean);
     delete obj.tagsText;
@@ -901,6 +1127,7 @@
     renderTimeline();
     renderStats();
     renderSettings();
+    renderCommunity();
   }
   function renderActive() {
     const tab = currentTab();
@@ -917,6 +1144,7 @@
     if (name === 'stats') renderStats();
     if (name === 'settings') renderSettings();
     if (name === 'journal') renderJournal();
+    if (name === 'community') fetchCommunity(true);
   }
 
   /* ============================================================
@@ -998,6 +1226,8 @@
     await pullFromCloud();
     applySyncedTheme();
     renderAll();
+    startCommunityPolling();
+    fetchCommunity(true);
     $('#authSubmit').disabled = false;
   }
 
@@ -1005,12 +1235,17 @@
     if (!confirm('退出登录？本机缓存会保留，重新登录即可继续使用。')) return;
     dirty = false;
     clearTimeout(syncTimer);
+    stopCommunityPolling();
     await Cloud.logout();
     $('#userBox').hidden = true;
     $('#userEmail').textContent = '';
     setSyncState('');
     DB = emptyDB();
     saveLocal();
+    // 清掉共享数据的内存副本，避免退出后仍显示他人内容
+    capiItems = [];
+    capiStamp = -1;
+    capiRevealed.clear();
     renderAll();
     showAuthGate();
   }
@@ -1044,7 +1279,11 @@
     });
 
     // 新建按钮
-    $$('[data-new]').forEach(b => b.addEventListener('click', () => openModal(b.dataset.new)));
+    // 新建按钮（社区 API 需要走带作者校验的表单，单独处理）
+    $$('[data-new]').forEach(b => b.addEventListener('click', () => {
+      if (b.dataset.new === 'capi') openCapiForm(null);
+      else openModal(b.dataset.new);
+    }));
 
     // 卡片 / 任务点击编辑（拖拽的除外）
     document.addEventListener('click', e => {
@@ -1085,6 +1324,24 @@
     $('#expSearch').addEventListener('input', renderExperiments);
     $('#paperSearch').addEventListener('input', renderPapers);
     $('#journalSearch').addEventListener('input', renderJournal);
+    $('#capiSearch').addEventListener('input', renderCommunity);
+    $('#capiFilters').addEventListener('click', e => {
+      const c = e.target.closest('.chip');
+      if (!c) return;
+      capiFilter = c.dataset.capiF;
+      renderCommunity();
+    });
+    // 列表内的：显示/隐藏密钥、编辑、删除
+    $('#capiList').addEventListener('click', e => {
+      const showBtn = e.target.closest('[data-capi-show]');
+      if (showBtn) { capiRevealed.add(showBtn.dataset.capiShow); renderCommunity(); return; }
+      const hideBtn = e.target.closest('[data-capi-hide]');
+      if (hideBtn) { capiRevealed.delete(hideBtn.dataset.capiHide); renderCommunity(); return; }
+      const editBtn = e.target.closest('[data-capi-edit]');
+      if (editBtn) { openCapiForm(editBtn.dataset.capiEdit); return; }
+      const delBtn = e.target.closest('[data-capi-del]');
+      if (delBtn) { deleteCapiItem(delBtn.dataset.capiDel); return; }
+    });
     $('#journalFilters').addEventListener('click', e => {
       const c = e.target.closest('.chip');
       if (!c) return;
@@ -1200,6 +1457,8 @@
     await pullFromCloud();
     applySyncedTheme();
     renderAll();
+    startCommunityPolling();
+    fetchCommunity(true);
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);

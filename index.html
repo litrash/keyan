@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>科研进度管理</title>
-<link rel="stylesheet" href="assets/style.css?v=20261007a">
+<link rel="stylesheet" href="assets/style.css?v=20261007c">
 </head>
 <body>
 
@@ -21,6 +21,7 @@
     <button class="tab-btn" data-tab="experiments">🧫 实验记录</button>
     <button class="tab-btn" data-tab="papers">📚 论文文献</button>
     <button class="tab-btn" data-tab="journal">📔 日记</button>
+    <button class="tab-btn" data-tab="community">🔌 最新 API 贡献</button>
     <button class="tab-btn" data-tab="timeline">🗓 时间线</button>
     <button class="tab-btn" data-tab="stats">📈 统计</button>
     <button class="tab-btn" data-tab="settings">⚙️ 设置</button>
@@ -89,6 +90,29 @@
     <div class="filters" id="journalFilters"></div>
     <div class="journal-list" id="journalList"></div>
     <div class="empty" id="journalEmpty" hidden>还没有日记，点右上角「写日记」记录今天。</div>
+  </section>
+
+  <!-- ================= 最新 API 贡献（社区共享） ================= -->
+  <section class="panel" id="panel-community">
+    <div class="panel-head">
+      <h2>最新 API 贡献</h2>
+      <div class="head-tools">
+        <input type="text" class="search" id="capiSearch" placeholder="🔍 搜索名称 / 地址 / 模型 / 备注">
+        <button class="btn primary" data-new="capi">＋ 贡献 API</button>
+      </div>
+    </div>
+
+    <div class="settings-block" style="padding:14px 18px;border-left:3px solid var(--orange)">
+      <div style="font-size:13px;display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+        <span>📢 本页内容 <b>所有登录用户可见、可编辑共享</b>。</span>
+        <span style="color:var(--muted)">密钥默认打码，需点击「显示」查看。</span>
+        <span style="color:var(--muted)">共享 <b id="capiCount">0</b> 条 · <span id="capiLive">实时同步中</span></span>
+      </div>
+    </div>
+
+    <div class="filters" id="capiFilters"></div>
+    <div class="capi-list" id="capiList"></div>
+    <div class="empty" id="capiEmpty" hidden>还没有人贡献 API，点右上角「贡献 API」添加第一条。</div>
   </section>
 
   <!-- ================= 时间线 ================= -->
@@ -281,9 +305,9 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <!-- 资源带版本号：避免浏览器命中旧缓存导致新功能不生效。
      每次改动 assets 下的文件后，把下面的 ?v= 值改一下即可强制刷新。 -->
-<script src="assets/theme.js?v=20261007a"></script>
-<script src="assets/pomodoro.js?v=20261007a"></script>
-<script src="assets/cloud.js?v=20261007a"></script>
-<script src="assets/app.js?v=20261007a"></script>
+<script src="assets/theme.js?v=20261007c"></script>
+<script src="assets/pomodoro.js?v=20261007c"></script>
+<script src="assets/cloud.js?v=20261007c"></script>
+<script src="assets/app.js?v=20261007c"></script>
 </body>
 </html>

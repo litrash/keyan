@@ -154,8 +154,15 @@
     }
   }
 
+  /* ---------- 社区共享：最新 API 贡献 ---------- */
+  const listCommunity = () => api('/api/community');
+  const createCommunity = (item) => api('/api/community', { method: 'POST', body: item });
+  const updateCommunity = (id, item) => api('/api/community/' + encodeURIComponent(id), { method: 'PUT', body: item });
+  const deleteCommunity = (id) => api('/api/community/' + encodeURIComponent(id), { method: 'DELETE' });
+
   window.CloudAPI = {
     API_BASE, register, login, logout, isLoggedIn, currentUser, checkSession,
-    pull, push, on, emit, store
+    pull, push, on, emit, store,
+    listCommunity, createCommunity, updateCommunity, deleteCommunity
   };
 })();
