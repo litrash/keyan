@@ -7,8 +7,9 @@
 (function () {
   'use strict';
 
-  // 部署 Worker 后，把这里改成你的地址（例如 https://research-progress-cloud.xxx.workers.dev）
-  const API_BASE = window.RESEARCH_API_BASE || 'http://127.0.0.1:8788';
+  // 云端后端地址（Cloudflare Worker + D1）。
+  // 如需自定义，可在 index.html 里于本文件之前设置 window.RESEARCH_API_BASE。
+  const API_BASE = window.RESEARCH_API_BASE || 'https://rp.dahuajia.ccwu.cc';
 
   const TOKEN_KEY = 'research_progress_token';
   const USER_KEY  = 'research_progress_user';
