@@ -166,8 +166,12 @@
       const id = dragId || (e.dataTransfer && e.dataTransfer.getData('text/plain'));
       const t = DB.tasks.find(x => x.id === id);
       if (t && t.stage !== col.dataset.stage) {
+        const prev = t.stage;
         t.stage = col.dataset.stage;
         t.updated = new Date().toISOString();
+        // 记录真实的完成时间，供「近 8 周完成任务」统计使用；移出「已完成」则清除。
+        if (t.stage === 'done' && !t.completed) t.completed = t.updated;
+        if (t.stage !== 'done' && prev === 'done') t.completed = '';
         save(); renderBoard();
       }
       dragId = null;
@@ -291,7 +295,6 @@
   const charts = {};
   function renderStats() {
     const doneTasks = DB.tasks.filter(t => t.stage === 'done').length;
-    const okExp = DB.experiments.filter(e => e.status === 'ok').length;
     const accepted = DB.papers.filter(p => p.status === 'accept').length;
     const upcoming = DB.milestones.filter(m => !m.done && m.date && daysBetween(todayISO(), m.date) >= 0).length;
 
@@ -324,15 +327,22 @@
       datasets: [{ data: PAPER_STATUS.map(s => DB.papers.filter(p => p.status === s.key).length), backgroundColor: '#8b5cf6', borderRadius: 6 }]
     }, { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } });
 
-    // 近 8 周完成任务
+    // 近 8 周完成任务数
+    // 归周依据应为「实际完成时间」。旧实现用 t.due（截止日期）统计，
+    // 导致已完成任务的 due 不在窗口内时统计恒为 0，与「已完成任务」卡片自相矛盾。
+    // 这里按 completed → updated → created → due 依次回退，保证老数据也能被归周。
     const weeks = [], labels = [];
     const now = new Date();
+    const doneList = DB.tasks.filter(t => t.stage === 'done');
+    const doneDate = (t) => {
+      const raw = t.completed || t.updated || t.created || t.due;
+      return raw ? String(raw).slice(0, 10) : '';
+    };
     for (let i = 7; i >= 0; i--) {
-      const start = new Date(now); start.setDate(now.getDate() - i * 7 - 6);
       const end = new Date(now); end.setDate(now.getDate() - i * 7);
+      const start = new Date(end); start.setDate(end.getDate() - 6);
       const s = start.toISOString().slice(0, 10), e2 = end.toISOString().slice(0, 10);
-      const n = DB.tasks.filter(t => t.stage === 'done' && t.due && t.due >= s && t.due <= e2).length;
-      weeks.push(n);
+      weeks.push(doneList.filter(t => { const d = doneDate(t); return d && d >= s && d <= e2; }).length);
       labels.push(`${start.getMonth() + 1}/${start.getDate()}`);
     }
     draw('ch-weekly', 'line', {
@@ -466,10 +476,17 @@
     const list = DB[DATA_KEY[type]];
     if (id) {
       const it = list.find(x => x.id === id);
+      const wasDone = it.stage === 'done';
       Object.assign(it, obj, { updated: new Date().toISOString() });
+      // 通过表单把任务改为「已完成」时，同样记录完成时间（保持与拖拽行为一致）
+      if (type === 'task') {
+        if (it.stage === 'done' && !wasDone && !it.completed) it.completed = it.updated;
+        if (it.stage !== 'done' && wasDone) it.completed = '';
+      }
     } else {
       obj.id = uid();
       obj.created = new Date().toISOString();
+      if (type === 'task' && obj.stage === 'done') obj.completed = obj.created;
       list.push(obj);
     }
     save();

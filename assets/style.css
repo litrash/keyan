@@ -207,12 +207,23 @@ main { max-width: 1400px; margin: 0 auto; padding: 24px 26px 60px; }
 .stat-card .num { font-size: 30px; font-weight: 800; line-height: 1.2; }
 .stat-card .label { font-size: 13px; color: var(--muted); margin-top: 2px; }
 .chart-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+/* 关键：canvas 必须放在一个「有确定高度」的容器里。
+   Chart.js 用 maintainAspectRatio:false 时高度完全交给父容器，
+   若父容器只有 min-height（没有确定高度），canvas 会按宽度撑成数千像素高。
+   这里用 flex 纵向布局 + height 给出确定高度，并让 canvas 可收缩。 */
 .chart-box {
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 18px 20px; box-shadow: var(--shadow); min-height: 300px;
+  padding: 18px 20px; box-shadow: var(--shadow);
+  display: flex; flex-direction: column;
+  height: 320px; min-height: 320px;
 }
-.chart-box.wide { grid-column: 1 / -1; }
-.chart-box h3 { font-size: 14px; margin-bottom: 14px; font-weight: 700; }
+.chart-box.wide { grid-column: 1 / -1; height: 340px; min-height: 340px; }
+.chart-box h3 { font-size: 14px; margin-bottom: 14px; font-weight: 700; flex: 0 0 auto; }
+/* 图表承载区：占满剩余空间，min-height:0 允许收缩（否则 flex 子项不会小于内容高度） */
+.chart-body { position: relative; flex: 1 1 auto; min-height: 0; }
+.chart-body canvas { display: block; width: 100% !important; height: 100% !important; }
+/* 无 canvas 时的兜底：直接子 canvas 也约束住 */
+.chart-box > canvas { flex: 1 1 auto; min-height: 0; width: 100% !important; }
 
 /* ---------- 弹窗 ---------- */
 .modal {
@@ -255,6 +266,8 @@ main { max-width: 1400px; margin: 0 auto; padding: 24px 26px 60px; }
 @media (max-width: 900px) {
   .kanban { grid-template-columns: 1fr; }
   .chart-grid { grid-template-columns: 1fr; }
+  .chart-box { height: 300px; min-height: 300px; }
+  .chart-box.wide { height: 300px; min-height: 300px; }
   .topbar { padding: 12px 16px; }
   .tabs { order: 3; width: 100%; margin-left: 0; }
   main { padding: 18px 16px 50px; }
