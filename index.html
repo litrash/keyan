@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>科研进度管理</title>
-<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/style.css?v=20261007a">
 </head>
 <body>
 
@@ -279,9 +279,11 @@
 <input type="file" id="fileInput" accept="application/json,.json" hidden>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="assets/theme.js"></script>
-<script src="assets/pomodoro.js"></script>
-<script src="assets/cloud.js"></script>
-<script src="assets/app.js"></script>
+<!-- 资源带版本号：避免浏览器命中旧缓存导致新功能不生效。
+     每次改动 assets 下的文件后，把下面的 ?v= 值改一下即可强制刷新。 -->
+<script src="assets/theme.js?v=20261007a"></script>
+<script src="assets/pomodoro.js?v=20261007a"></script>
+<script src="assets/cloud.js?v=20261007a"></script>
+<script src="assets/app.js?v=20261007a"></script>
 </body>
 </html>
