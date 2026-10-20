@@ -860,13 +860,17 @@
       const st = IDEA_STATUS.find(s => s.key === x.status) || { name: '', cls: '' };
       const pr = PRIORITIES.find(p => p.key === x.priority);
       const t = normTable(x.table);
+      // 表格视图里直接把自定义表格渲染出来，而不是只写"几行几列"
+      const inner = hasTable(x)
+        ? ideaTableHtml(x, t, { editable: false })
+        : `<button class="btn ghost" data-idea-table="${x.id}">＋ 添加表格</button>`;
       return `<tr>
         <td class="itc-title">${esc(x.title) || '(无标题)'}</td>
         <td><span class="badge ${st.cls}">${esc(st.name)}</span></td>
         <td>${pr ? `<span class="tag ${pr.cls}">${esc(pr.name)}</span>` : ''}</td>
         <td>${(x.tags || []).map(g => `<span class="tag">${esc(g)}</span>`).join(' ')}</td>
         <td class="itc-body">${esc(x.body || '')}</td>
-        <td class="itc-table">${hasTable(x) ? `${t.rows.length} 行 × ${t.columns.length} 列` : '—'}</td>
+        <td class="itc-table">${inner}</td>
         <td class="itc-ops">
           <button class="btn ghost" data-idea-edit="${x.id}">编辑</button>
           <button class="btn ghost" data-idea-table="${x.id}">表格</button>
@@ -931,6 +935,15 @@
       t = { columns: ['方案', '说明'], rows: [['', ''], ['', '']] };
       idea.table = t;
       save();
+    }
+    // 表格编辑器只在卡片视图里可用：若当前是表格视图，先切回来
+    if (ideaView !== 'card') {
+      ideaView = 'card';
+      const sw = $('#ideaViewSwitch');
+      if (sw) {
+        $$('#ideaViewSwitch button').forEach(b =>
+          b.classList.toggle('active', b.dataset.ideaView === 'card'));
+      }
     }
     // 展开并滚动到该卡片
     ideaOpen.add(id);

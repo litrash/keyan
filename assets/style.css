@@ -733,6 +733,11 @@ main { max-width: 1400px; margin: 0 auto; padding: 24px 26px 60px; }
 .idea-table tbody tr:hover { background: var(--accent-soft); }
 .itc-title { font-weight: 600; min-width: 140px; }
 .itc-body { color: var(--muted); max-width: 320px; }
-.itc-table { white-space: nowrap; color: var(--muted); }
+.itc-table { white-space: normal; vertical-align: top; min-width: 260px; }
+.itc-table .it-scroll { min-width: 240px; background: var(--bg); }
+.itc-table .custom-table { min-width: 240px; font-size: 12px; }
+.itc-table .custom-table th, .itc-table .custom-table td { padding: 5px 8px; }
+/* 表格视图的外层行悬停时，不要给内嵌表格也染上底色 */
+.idea-table tbody tr:hover .custom-table thead th { background: var(--bg); }
 .itc-ops { white-space: nowrap; }
 .itc-ops .btn { font-size: 11.5px; padding: 4px 9px; margin-right: 4px; }
