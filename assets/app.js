@@ -36,6 +36,24 @@
     { key: 'reject',  name: '被拒',   cls: 'b-reject' }
   ];
 
+  /* 论文写作进度（独立于文献库，专注「写到哪了」） */
+  const WRITE_STAGES = [
+    { key: 'outline', name: '选题/提纲', cls: 'b-plan' },
+    { key: 'draft',   name: '撰写中',   cls: 'b-writing' },
+    { key: 'submit',  name: '待投稿',   cls: 'b-submit' },
+    { key: 'revise',  name: '审稿返修', cls: 'b-revise' },
+    { key: 'done',    name: '已定稿',   cls: 'b-accept' }
+  ];
+
+  /* 奇思妙想：想法 / 创新点的状态 */
+  const IDEA_STATUS = [
+    { key: 'seed',    name: '酝酿中', cls: 'b-plan' },
+    { key: 'testing', name: '验证中', cls: 'b-run' },
+    { key: 'adopted', name: '已采用', cls: 'b-ok' },
+    { key: 'shelved', name: '已搁置', cls: 'b-fail' }
+  ];
+  const IDEA_PRIORITY = PRIORITIES;   // 复用 P0/P1/P2
+
   /* ---------------- 工具 ---------------- */
   const $  = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
@@ -58,9 +76,12 @@
   }
 
   /* ---------------- 数据层 ---------------- */
-  const COLLECTIONS = ['tasks', 'experiments', 'papers', 'milestones', 'journal'];
+  const COLLECTIONS = ['tasks', 'experiments', 'papers', 'milestones', 'journal', 'writings', 'ideas'];
   // settings 存放随账号同步的轻量配置（如主题），不是数组
-  const emptyDB = () => ({ tasks: [], experiments: [], papers: [], milestones: [], journal: [], settings: {} });
+  const emptyDB = () => ({
+    tasks: [], experiments: [], papers: [], milestones: [], journal: [],
+    writings: [], ideas: [], settings: {}
+  });
   let DB = emptyDB();
 
   /* ---- 云端同步状态 ---- */
@@ -237,14 +258,18 @@
       const items = DB.tasks.filter(t => t.stage === stage.key);
       const cards = items.map(taskCardHtml).join('');
 
-      // 「进行中」列追加：实验（计划中 + 进行中，即所有未结束的） + 30 天内待达成里程碑
-      // 「待启动」列追加：30 天以后的里程碑
+      // 各列追加其它模块的条目：
+      //   进行中 → 实验（计划中 + 进行中） + 30 天内待达成里程碑
+      //   待启动 → 30 天以后的里程碑
+      //   已完成 → 已完成实验(ok) + 已完成里程碑(done)
       let extra = '';
       if (stage.key === 'doing') extra = activeWorkHtml();
       else if (stage.key === 'todo') extra = upcomingMilestoneHtml();
+      else if (stage.key === 'done') extra = finishedWorkHtml();
 
       const extraCount = (stage.key === 'doing') ? activeWorkCount()
-                       : (stage.key === 'todo') ? upcomingMilestoneCount() : 0;
+                       : (stage.key === 'todo') ? upcomingMilestoneCount()
+                       : (stage.key === 'done') ? finishedWorkCount() : 0;
 
       return `<div class="column" data-stage="${stage.key}">
         <div class="col-head">
@@ -330,6 +355,51 @@
     </div>`;
   }
 
+  /* ---- 已完成：实验(ok) + 里程碑(done) ---- */
+  function finishedExperiments() {
+    return DB.experiments.filter(e => e.status === 'ok');
+  }
+  function finishedMilestones() {
+    return DB.milestones.filter(m => m.done);
+  }
+  function finishedWorkCount() {
+    return finishedExperiments().length + finishedMilestones().length;
+  }
+
+  function finishedWorkHtml() {
+    const exps = finishedExperiments()
+      .slice()
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    const ms = finishedMilestones()
+      .slice()
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    if (!exps.length && !ms.length) return '';
+
+    const parts = [];
+    if (exps.length) {
+      parts.push(`<div class="mini-group-label">🧫 已完成实验 · ${exps.length}</div>`);
+      parts.push(exps.map(referCardHtml('experiment', e => {
+        const res = [e.metric, e.value].filter(Boolean).join('：');
+        return {
+          type: 'experiment', id: e.id, icon: '🧫', done: true,
+          title: e.title || '(未命名实验)',
+          badge: { text: '已完成', cls: 'b-ok' },
+          meta: [e.date ? `📅 ${e.date}` : '', res ? `📊 ${res}` : ''].filter(Boolean).join('　')
+        };
+      })).join(''));
+    }
+    if (ms.length) {
+      parts.push(`<div class="mini-group-label">🗓 已完成里程碑 · ${ms.length}</div>`);
+      parts.push(ms.map(referCardHtml('milestone', m => ({
+        type: 'milestone', id: m.id, icon: '🗓', done: true,
+        title: m.title || '(无标题)',
+        badge: { text: '已完成', cls: 'b-ok' },
+        meta: m.date ? `📅 ${m.date}` : ''
+      }))).join(''));
+    }
+    return `<div class="mini-group">${parts.join('')}</div>`;
+  }
+
   /**
    * 生成看板里的「引用卡片」（实验/里程碑）。
    * 不可拖拽（阶段只能由任务决定），点击打开对应编辑弹窗。
@@ -337,7 +407,7 @@
   function referCardHtml(type, mapFn) {
     return (item) => {
       const d = mapFn(item);
-      return `<div class="ref-card" data-type="${d.type}" data-id="${d.id}" title="点击编辑">
+      return `<div class="ref-card${d.done ? ' is-done' : ''}" data-type="${d.type}" data-id="${d.id}" title="点击编辑">
         <div class="ref-top">
           <span class="ref-icon">${d.icon}</span>
           <span class="ref-title">${esc(d.title)}</span>
@@ -585,6 +655,168 @@
       cur.setDate(cur.getDate() + 1);
     }
     $('#journalHeat').innerHTML = cells.join('');
+  }
+
+  /* ============================================================
+   * 渲染：论文写作进度
+   * 独立于「论文文献」，关注「写到哪了」：章节、字数、进度条
+   * ============================================================ */
+  let writeFilter = 'all';
+
+  /** 把 "3,200" / "3200 字" 之类解析成数字，解析不了返回 0 */
+  function toNum(v) {
+    const n = Number(String(v == null ? '' : v).replace(/[^\d.]/g, ''));
+    return isFinite(n) && n >= 0 ? n : 0;
+  }
+  /** 写作进度百分比：优先用字数比，没有目标字数则按阶段估算 */
+  function writeProgress(w) {
+    const goal = toNum(w.wordGoal);
+    const now = toNum(w.wordNow);
+    if (goal > 0) return Math.max(0, Math.min(100, Math.round(now / goal * 100)));
+    // 没有字数目标时，用阶段给一个粗略进度
+    const idx = WRITE_STAGES.findIndex(s => s.key === w.stage);
+    const fallback = [10, 35, 70, 85, 100];
+    return idx >= 0 ? fallback[idx] : 0;
+  }
+
+  function renderWritings() {
+    const q = ($('#writeSearch').value || '').trim().toLowerCase();
+    let list = DB.writings.slice();
+
+    if (writeFilter !== 'all') list = list.filter(w => w.stage === writeFilter);
+    if (q) {
+      list = list.filter(w =>
+        (w.title || '').toLowerCase().includes(q) ||
+        (w.chapter || '').toLowerCase().includes(q) ||
+        (w.note || '').toLowerCase().includes(q) ||
+        (w.tags || []).join(' ').toLowerCase().includes(q));
+    }
+    // 有截止日期的排前面，其次按更新时间
+    list.sort((a, b) => {
+      if (a.due && b.due) return a.due.localeCompare(b.due);
+      if (a.due) return -1;
+      if (b.due) return 1;
+      return (b.updated || '').localeCompare(a.updated || '');
+    });
+
+    $('#writeEmpty').hidden = list.length > 0;
+    if (!list.length) {
+      $('#writeEmpty').textContent = DB.writings.length
+        ? '没有符合条件的写作条目。'
+        : '还没有写作进度，点右上角「新建写作」开始。';
+    }
+
+    $('#writeList').innerHTML = list.map(w => {
+      const st = WRITE_STAGES.find(s => s.key === w.stage) || { name: '', cls: '' };
+      const pct = writeProgress(w);
+      const goal = toNum(w.wordGoal), now = toNum(w.wordNow);
+      const due = w.due ? relDue(w.due) : { text: '', cls: '' };
+      const paper = w.linkPaper ? DB.papers.find(p => p.id === w.linkPaper) : null;
+      const tags = (w.tags || []).map(x => `<span class="tag">${esc(x)}</span>`).join('');
+
+      return `<div class="card write-card" data-type="writing" data-id="${w.id}">
+        <h4>${esc(w.title) || '(无标题)'} <span class="badge ${st.cls}">${esc(st.name)}</span></h4>
+        <div class="write-bar"><i style="width:${pct}%"></i></div>
+        <div class="write-meta">
+          <span><b>${pct}%</b></span>
+          ${goal > 0 ? `<span>${now} / ${goal} 字</span>` : (now > 0 ? `<span>${now} 字</span>` : '')}
+          ${due.text ? `<span class="due ${due.cls}">⏰ ${due.text}</span>` : ''}
+        </div>
+        ${w.chapter ? `<div class="row">📝 当前：${esc(w.chapter)}</div>` : ''}
+        ${paper ? `<div class="row">🔗 关联文献：${esc(paper.title)}</div>` : ''}
+        ${w.note ? `<div class="note">${esc(w.note)}</div>` : ''}
+        ${tags ? `<div class="tags">${tags}</div>` : ''}
+      </div>`;
+    }).join('');
+
+    renderWriteFilters();
+  }
+
+  function renderWriteFilters() {
+    const counts = {};
+    DB.writings.forEach(w => { counts[w.stage] = (counts[w.stage] || 0) + 1; });
+    const chips = [`<button class="chip ${writeFilter === 'all' ? 'active' : ''}" data-wf="all">全部 (${DB.writings.length})</button>`];
+    WRITE_STAGES.forEach(s => {
+      const n = counts[s.key] || 0;
+      if (n === 0 && writeFilter !== s.key) return;
+      chips.push(`<button class="chip ${writeFilter === s.key ? 'active' : ''}" data-wf="${s.key}">${s.name} (${n})</button>`);
+    });
+    $('#writeFilters').innerHTML = chips.join('');
+  }
+
+  /* ============================================================
+   * 渲染：奇思妙想
+   * 保存想法 / 创新点，带状态与优先级
+   * ============================================================ */
+  let ideaFilter = 'all';
+
+  function renderIdeas() {
+    const q = ($('#ideaSearch').value || '').trim().toLowerCase();
+    let list = DB.ideas.slice();
+
+    if (ideaFilter !== 'all') {
+      if (ideaFilter.indexOf('tag:') === 0) {
+        const tag = ideaFilter.slice(4);
+        list = list.filter(x => (x.tags || []).includes(tag));
+      } else {
+        list = list.filter(x => x.status === ideaFilter);
+      }
+    }
+    if (q) {
+      list = list.filter(x =>
+        (x.title || '').toLowerCase().includes(q) ||
+        (x.body || '').toLowerCase().includes(q) ||
+        (x.tags || []).join(' ').toLowerCase().includes(q));
+    }
+    // 优先级高的在前，其次按更新时间
+    const rank = { P0: 0, P1: 1, P2: 2 };
+    list.sort((a, b) => {
+      const r = (rank[a.priority] == null ? 9 : rank[a.priority]) - (rank[b.priority] == null ? 9 : rank[b.priority]);
+      if (r !== 0) return r;
+      return (b.updated || b.created || '').localeCompare(a.updated || a.created || '');
+    });
+
+    $('#ideaEmpty').hidden = list.length > 0;
+    if (!list.length) {
+      $('#ideaEmpty').textContent = DB.ideas.length
+        ? '没有符合条件的想法。'
+        : '还没有记录想法，点右上角「记录想法」写下第一个点子。';
+    }
+
+    $('#ideaList').innerHTML = list.map(x => {
+      const st = IDEA_STATUS.find(s => s.key === x.status) || { name: '', cls: '' };
+      const pr = PRIORITIES.find(p => p.key === x.priority) || null;
+      const tags = (x.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('');
+      return `<div class="card idea-card" data-type="idea" data-id="${x.id}">
+        <h4>${esc(x.title) || '(无标题)'} <span class="badge ${st.cls}">${esc(st.name)}</span></h4>
+        ${x.body ? `<div class="idea-body">${esc(x.body)}</div>` : ''}
+        <div class="tags" style="margin-top:9px">
+          ${pr ? `<span class="tag ${pr.cls}">${esc(pr.name)}</span>` : ''}
+          ${tags}
+        </div>
+      </div>`;
+    }).join('');
+
+    renderIdeaFilters();
+  }
+
+  function renderIdeaFilters() {
+    const counts = {};
+    const tagCounts = {};
+    DB.ideas.forEach(x => {
+      if (x.status) counts[x.status] = (counts[x.status] || 0) + 1;
+      (x.tags || []).forEach(t => { tagCounts[t] = (tagCounts[t] || 0) + 1; });
+    });
+    const chips = [`<button class="chip ${ideaFilter === 'all' ? 'active' : ''}" data-if="all">全部 (${DB.ideas.length})</button>`];
+    IDEA_STATUS.forEach(s => {
+      const n = counts[s.key] || 0;
+      if (n === 0 && ideaFilter !== s.key) return;
+      chips.push(`<button class="chip ${ideaFilter === s.key ? 'active' : ''}" data-if="${s.key}">${s.name} (${n})</button>`);
+    });
+    Object.keys(tagCounts).sort().forEach(t => {
+      chips.push(`<button class="chip ${ideaFilter === 'tag:' + t ? 'active' : ''}" data-if="tag:${esc(t)}">#${esc(t)} (${tagCounts[t]})</button>`);
+    });
+    $('#ideaFilters').innerHTML = chips.join('');
   }
 
   /* ============================================================
@@ -1014,6 +1246,32 @@
       ],
       defaults: { date: todayISO(), mood: '', title: '', linkTask: '', tagsText: '', body: '' }
     },
+    writing: {
+      title: '写作进度',
+      fields: [
+        { k: 'title', label: '论文题目', type: 'text', required: true, full: true, placeholder: '例如：基于注意力机制的长文本建模' },
+        { k: 'stage', label: '阶段', type: 'select', options: WRITE_STAGES.map(s => [s.key, s.name]) },
+        { k: 'due', label: '目标完成日期', type: 'date' },
+        { k: 'chapter', label: '当前章节', type: 'text', placeholder: '例如：第 3 章 方法' },
+        { k: 'wordGoal', label: '目标字数', type: 'text', placeholder: '例如：8000' },
+        { k: 'wordNow', label: '当前字数', type: 'text', placeholder: '例如：3200' },
+        { k: 'linkPaper', label: '关联文献（可选）', type: 'papers' },
+        { k: 'tagsText', label: '标签（逗号分隔）', type: 'text', full: true },
+        { k: 'note', label: '备注 / 待办', type: 'textarea', full: true, rows: 3 }
+      ],
+      defaults: { title: '', stage: 'outline', due: '', chapter: '', wordGoal: '', wordNow: '', linkPaper: '', tagsText: '', note: '' }
+    },
+    idea: {
+      title: '奇思妙想',
+      fields: [
+        { k: 'title', label: '想法标题', type: 'text', required: true, full: true, placeholder: '一句话说清这个点子' },
+        { k: 'status', label: '状态', type: 'select', options: IDEA_STATUS.map(s => [s.key, s.name]) },
+        { k: 'priority', label: '优先级', type: 'select', options: IDEA_PRIORITY.map(p => [p.key, p.name]) },
+        { k: 'tagsText', label: '标签（逗号分隔）', type: 'text', full: true, placeholder: '创新点, 待验证' },
+        { k: 'body', label: '详细内容', type: 'textarea', full: true, rows: 8, placeholder: '展开说说：为什么可行、怎么验证、有什么风险…' }
+      ],
+      defaults: { title: '', status: 'seed', priority: 'P2', tagsText: '', body: '' }
+    },
     capi: {
       title: 'API 贡献',
       fields: [
@@ -1038,7 +1296,10 @@
   ];
   const moodOf = (k) => MOODS.find(m => m.k === k) || null;
 
-  const DATA_KEY = { task: 'tasks', experiment: 'experiments', paper: 'papers', milestone: 'milestones', journal: 'journal' };
+  const DATA_KEY = {
+    task: 'tasks', experiment: 'experiments', paper: 'papers',
+    milestone: 'milestones', journal: 'journal', writing: 'writings', idea: 'ideas'
+  };
   let editing = { type: null, id: null };
 
   function fieldHtml(f, val) {
@@ -1061,6 +1322,11 @@
     } else if (f.type === 'tasks') {
       const opts = ['<option value="">（不关联）</option>'].concat(
         DB.tasks.map(t => `<option value="${esc(t.id)}" ${String(v) === String(t.id) ? 'selected' : ''}>${esc((t.title || '(未命名)').slice(0, 40))}</option>`)
+      );
+      inner = `<select name="${f.k}">${opts.join('')}</select>`;
+    } else if (f.type === 'papers') {
+      const opts = ['<option value="">（不关联）</option>'].concat(
+        DB.papers.map(p => `<option value="${esc(p.id)}" ${String(v) === String(p.id) ? 'selected' : ''}>${esc((p.title || '(无标题)').slice(0, 45))}</option>`)
       );
       inner = `<select name="${f.k}">${opts.join('')}</select>`;
     } else {
@@ -1238,6 +1504,8 @@
     renderExperiments();
     renderPaperFilters();
     renderPapers();
+    renderWritings();
+    renderIdeas();
     renderJournal();
     renderTimeline();
     renderStats();
@@ -1259,6 +1527,8 @@
     if (name === 'stats') renderStats();
     if (name === 'settings') renderSettings();
     if (name === 'journal') renderJournal();
+    if (name === 'writing') renderWritings();
+    if (name === 'ideas') renderIdeas();
     if (name === 'community') fetchCommunity(true);
   }
 
@@ -1442,6 +1712,20 @@
     $('#expSearch').addEventListener('input', renderExperiments);
     $('#paperSearch').addEventListener('input', renderPapers);
     $('#journalSearch').addEventListener('input', renderJournal);
+    $('#writeSearch').addEventListener('input', renderWritings);
+    $('#writeFilters').addEventListener('click', e => {
+      const c = e.target.closest('.chip');
+      if (!c) return;
+      writeFilter = c.dataset.wf;
+      renderWritings();
+    });
+    $('#ideaSearch').addEventListener('input', renderIdeas);
+    $('#ideaFilters').addEventListener('click', e => {
+      const c = e.target.closest('.chip');
+      if (!c) return;
+      ideaFilter = c.dataset.if;
+      renderIdeas();
+    });
     $('#capiSearch').addEventListener('input', renderCommunity);
     $('#capiFilters').addEventListener('click', e => {
       const c = e.target.closest('.chip');

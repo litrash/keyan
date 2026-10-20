@@ -641,3 +641,33 @@ main { max-width: 1400px; margin: 0 auto; padding: 24px 26px 60px; }
   display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
   font-size: 11.5px; color: var(--muted);
 }
+/* 已完成条目：淡化处理，与未完成区分 */
+.ref-card.is-done { opacity: .72; border-left-color: var(--green); }
+.ref-card.is-done .ref-title { text-decoration: line-through; text-decoration-color: var(--border); }
+
+/* ============================================================
+   论文写作进度
+   ============================================================ */
+.write-card .write-bar {
+  height: 6px; background: var(--border); border-radius: 4px;
+  overflow: hidden; margin: 10px 0 7px;
+}
+.write-card .write-bar i {
+  display: block; height: 100%; background: var(--accent);
+  border-radius: 4px; transition: width .3s ease;
+}
+.write-meta {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  font-size: 12.5px; color: var(--muted); margin-bottom: 7px;
+}
+.write-meta b { color: var(--accent); font-size: 14px; font-weight: 800; }
+
+/* ============================================================
+   奇思妙想
+   ============================================================ */
+.idea-card { border-left: 3px solid var(--orange); }
+.idea-body {
+  font-size: 13.5px; color: var(--muted); white-space: pre-wrap;
+  word-break: break-word; margin-top: 7px;
+  display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden;
+}
