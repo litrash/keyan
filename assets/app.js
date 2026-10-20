@@ -237,7 +237,8 @@
       const items = DB.tasks.filter(t => t.stage === stage.key);
       const cards = items.map(taskCardHtml).join('');
 
-      // 「进行中」列追加：进行中的实验 + 未完成里程碑；「待启动」列预告未来里程碑
+      // 「进行中」列追加：实验（计划中 + 进行中，即所有未结束的） + 30 天内待达成里程碑
+      // 「待启动」列追加：30 天以后的里程碑
       let extra = '';
       if (stage.key === 'doing') extra = activeWorkHtml();
       else if (stage.key === 'todo') extra = upcomingMilestoneHtml();
@@ -255,10 +256,11 @@
     }).join('');
   }
 
-  /* ---- 进行中：实验 + 里程碑 ---- */
+  /* ---- 进行中：实验（计划中 + 进行中） + 里程碑 ---- */
   function runningExperiments() {
-    // 状态为 run 的是进行中；兼容没有 status 的旧数据不纳入
-    return DB.experiments.filter(e => e.status === 'run');
+    // 「计划中(plan)」和「进行中(run)」都属于还没结束的实验，一并归到进行中列。
+    // 只有「已完成(ok)」「已失败(fail)」才算结束，不展示在看板。
+    return DB.experiments.filter(e => e.status === 'run' || e.status === 'plan');
   }
   function openMilestones() {
     // 未完成且已过日期或 30 天内到期
@@ -281,7 +283,11 @@
 
     const parts = [];
     if (exps.length) {
-      parts.push(`<div class="mini-group-label">🧫 进行中实验 · ${exps.length}</div>`);
+      const running = exps.filter(e => e.status === 'run').length;
+      const planned = exps.filter(e => e.status === 'plan').length;
+      const detail = [running ? `进行中 ${running}` : '', planned ? `计划中 ${planned}` : '']
+        .filter(Boolean).join(' · ');
+      parts.push(`<div class="mini-group-label">🧫 实验 · ${exps.length}${detail ? '（' + detail + '）' : ''}</div>`);
       parts.push(exps.map(referCardHtml('experiment', e => {
         const st = EXP_STATUS.find(s => s.key === e.status) || { name: '进行中', cls: 'b-run' };
         const res = [e.metric, e.value].filter(Boolean).join('：');
