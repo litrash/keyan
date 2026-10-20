@@ -891,33 +891,50 @@
   /**
    * 渲染一张可编辑表格。
    * 单元格用 contenteditable，失焦时写回数据（避免每敲一个字就重绘）。
+   * 可编辑模式下：
+   *   - 每个列标题右上角有个 ⋯ —— 点开可在该列左/右插入列、删除该列
+   *   - 每行最左侧有个 ⋯ —— 点开可在该行上/下插入行、删除该行
    */
   function ideaTableHtml(idea, t, opts) {
     const editable = opts && opts.editable;
     if (!t.columns.length && !t.rows.length) {
       return `<div class="it-empty">还没有表格，点下方「＋ 添加列」开始。</div>`;
     }
+    const nCols = t.columns.length;
+
     const head = t.columns.map((c, ci) => editable
       ? `<th contenteditable="true" data-cell="h" data-ci="${ci}" data-idea="${idea.id}">${esc(c)}</th>`
       : `<th>${esc(c)}</th>`).join('');
+
+    // 表头操作行：每个列标题下面挂一个 ⋯ 按钮（不占用单元格本身）
+    const headOps = editable
+      ? `<tr class="it-ops-row">${t.columns.map((c, ci) =>
+          `<th class="it-op-cell"><button class="it-col-menu" data-col-menu="${ci}" data-idea="${idea.id}"
+             title="在第 ${ci + 1} 列操作">⋯</button></th>`).join('')}
+          <th class="it-op"></th></tr>`
+      : '';
 
     const body = t.rows.map((row, ri) => {
       const cells = row.map((cell, ci) => editable
         ? `<td contenteditable="true" data-cell="b" data-ri="${ri}" data-ci="${ci}" data-idea="${idea.id}">${esc(cell)}</td>`
         : `<td>${esc(cell)}</td>`).join('');
-      return `<tr>${cells}${editable
-        ? `<td class="it-op"><button class="it-del-row" data-row-del="${ri}" data-idea="${idea.id}" title="删除本行">✕</button></td>`
-        : ''}</tr>`;
+      const opCell = editable
+        ? `<td class="it-op"><button class="it-row-menu" data-row-menu="${ri}" data-idea="${idea.id}"
+             title="在第 ${ri + 1} 行操作">⋯</button></td>`
+        : '';
+      return `<tr>${opCell}${cells}</tr>`;
     }).join('');
 
-    const foot = editable ? `<tfoot><tr><td colspan="${t.columns.length + 1}">
-        <button class="it-add-row" data-row-add="${idea.id}">＋ 添加行</button>
-        <button class="it-add-col" data-col-add="${idea.id}">＋ 添加列</button>
-        ${t.columns.length ? `<button class="it-del-col" data-col-del="${idea.id}" title="删除最后一列">－ 删末列</button>` : ''}
+    const foot = editable ? `<tfoot><tr><td colspan="${nCols + 1}">
+        <button class="it-add-row" data-row-add="${idea.id}">＋ 末尾加行</button>
+        <button class="it-add-col" data-col-add="${idea.id}">＋ 末尾加列</button>
+        <span class="it-foot-hint">提示：点每列标题或每行左侧的 ⋯ 可在任意位置插入/删除</span>
       </td></tr></tfoot>` : '';
 
+    const leadOp = editable ? '<th class="it-op"></th>' : '';
+
     return `<div class="it-scroll"><table class="custom-table">
-      ${t.columns.length ? `<thead><tr>${head}${editable ? '<th class="it-op"></th>' : ''}</tr></thead>` : ''}
+      ${nCols ? `<thead><tr>${leadOp}${head}<th class="it-op"></th></tr>${headOps}</thead>` : ''}
       <tbody>${body}</tbody>
       ${foot}
     </table></div>`;
@@ -984,6 +1001,119 @@
     if (!t.rows.length) t.rows.push(new Array(t.columns.length).fill(''));
     idea.table = t;
     touchIdea(idea);
+  }
+
+  /* ---------- 在指定位置插入 / 删除 ---------- */
+
+  /** 在第 ci 列之前(left)或之后(right)插入一列 */
+  function insertIdeaColAt(id, ci, side) {
+    const idea = findIdea(id);
+    if (!idea) return;
+    const t = normTable(idea.table);
+    const at = side === 'left' ? ci : ci + 1;
+    t.columns.splice(at, 0, `列 ${t.columns.length + 1}`);
+    if (t.rows.length) t.rows.forEach(r => r.splice(at, 0, ''));
+    else t.rows.push(new Array(t.columns.length).fill(''));
+    idea.table = t;
+    touchIdea(idea);
+  }
+
+  /** 删除第 ci 列 */
+  function deleteIdeaColAt(id, ci) {
+    const idea = findIdea(id);
+    if (!idea) return;
+    const t = normTable(idea.table);
+    if (ci < 0 || ci >= t.columns.length) return;
+    if (t.columns.length <= 1) { alert('至少要保留一列。'); return; }
+    const name = t.columns[ci] || `第 ${ci + 1} 列`;
+    if (!confirm(`删除第 ${ci + 1} 列「${name}」？该列数据会一并移除。`)) return;
+    t.columns.splice(ci, 1);
+    t.rows.forEach(r => r.splice(ci, 1));
+    idea.table = t;
+    touchIdea(idea);
+  }
+
+  /** 在第 ri 行之上(above)或之下(below)插入一行 */
+  function insertIdeaRowAt(id, ri, side) {
+    const idea = findIdea(id);
+    if (!idea) return;
+    const t = normTable(idea.table);
+    const cols = t.columns.length || 1;
+    const at = side === 'above' ? ri : ri + 1;
+    t.rows.splice(at, 0, new Array(cols).fill(''));
+    idea.table = t;
+    touchIdea(idea);
+  }
+
+  /** 删除第 ri 行 */
+  function deleteIdeaRowAt(id, ri) {
+    const idea = findIdea(id);
+    if (!idea) return;
+    const t = normTable(idea.table);
+    if (ri < 0 || ri >= t.rows.length) return;
+    if (t.rows.length <= 1) { alert('至少要保留一行。'); return; }
+    if (!confirm(`删除第 ${ri + 1} 行？`)) return;
+    t.rows.splice(ri, 1);
+    idea.table = t;
+    touchIdea(idea);
+  }
+
+  /* ---------- 定位菜单（列/行操作浮层）---------- */
+  let itMenuEl = null;
+  let itMenuHandlers = null;
+
+  function closeItMenu() {
+    if (itMenuHandlers) {
+      document.removeEventListener('mousedown', itMenuHandlers.down);
+      document.removeEventListener('keydown', itMenuHandlers.esc);
+      itMenuHandlers = null;
+    }
+    if (itMenuEl && itMenuEl.parentNode) itMenuEl.parentNode.removeChild(itMenuEl);
+    itMenuEl = null;
+  }
+
+  /**
+   * 在按钮附近弹出一个操作菜单。
+   * items: [{ label, action, danger }]
+   */
+  function showItMenu(anchor, items) {
+    closeItMenu();
+    const menu = document.createElement('div');
+    menu.className = 'it-menu';
+    menu.innerHTML = items.map((it, i) =>
+      `<button class="it-menu-item${it.danger ? ' danger' : ''}" data-menu-idx="${i}">${esc(it.label)}</button>`
+    ).join('');
+    document.body.appendChild(menu);
+    itMenuEl = menu;
+
+    // 定位：优先右侧，空间不够则翻到左侧；垂直方向做夹取
+    const r = anchor.getBoundingClientRect();
+    const mw = menu.offsetWidth, mh = menu.offsetHeight;
+    let left = r.right + 6;
+    if (left + mw > window.innerWidth - 8) left = Math.max(8, r.left - mw - 6);
+    let top = r.top;
+    if (top + mh > window.innerHeight - 8) top = Math.max(8, window.innerHeight - mh - 8);
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+
+    menu.addEventListener('click', e => {
+      const btn = e.target.closest('[data-menu-idx]');
+      if (!btn) return;
+      const it = items[Number(btn.dataset.menuIdx)];
+      closeItMenu();
+      if (it && it.action) it.action();
+    });
+
+    // 点别处 / 按 Esc 关闭
+    // 注意：不要用 esc 作变量名，会遮蔽全局的 HTML 转义函数 esc()
+    const onDown = (ev) => { if (itMenuEl && !itMenuEl.contains(ev.target)) closeItMenu(); };
+    const onKey = (ev) => { if (ev.key === 'Escape') closeItMenu(); };
+    itMenuHandlers = { down: onDown, esc: onKey };
+    setTimeout(() => {
+      if (!itMenuHandlers) return;
+      document.addEventListener('mousedown', onDown);
+      document.addEventListener('keydown', onKey);
+    }, 0);
   }
 
   function delIdeaCol(id) {
@@ -2005,18 +2135,36 @@
       // 删除
       const dl = e.target.closest('[data-idea-del]');
       if (dl) { deleteIdea(dl.dataset.ideaDel); return; }
+      // 列操作菜单
+      const cm = e.target.closest('[data-col-menu]');
+      if (cm) {
+        const id = cm.dataset.idea;
+        const ci = Number(cm.dataset.colMenu);
+        showItMenu(cm, [
+          { label: '← 在左侧插入列', action: () => insertIdeaColAt(id, ci, 'left') },
+          { label: '→ 在右侧插入列', action: () => insertIdeaColAt(id, ci, 'right') },
+          { label: `删除第 ${ci + 1} 列`, danger: true, action: () => deleteIdeaColAt(id, ci) }
+        ]);
+        return;
+      }
+      // 行操作菜单
+      const rm = e.target.closest('[data-row-menu]');
+      if (rm) {
+        const id = rm.dataset.idea;
+        const ri = Number(rm.dataset.rowMenu);
+        showItMenu(rm, [
+          { label: '↑ 在上方插入行', action: () => insertIdeaRowAt(id, ri, 'above') },
+          { label: '↓ 在下方插入行', action: () => insertIdeaRowAt(id, ri, 'below') },
+          { label: `删除第 ${ri + 1} 行`, danger: true, action: () => deleteIdeaRowAt(id, ri) }
+        ]);
+        return;
+      }
       // 添加行
       const ra = e.target.closest('[data-row-add]');
       if (ra) { addIdeaRow(ra.dataset.rowAdd); return; }
       // 添加列
       const ca = e.target.closest('[data-col-add]');
       if (ca) { addIdeaCol(ca.dataset.colAdd); return; }
-      // 删除最后一列
-      const cd = e.target.closest('[data-col-del]');
-      if (cd) { delIdeaCol(cd.dataset.colDel); return; }
-      // 删除某行
-      const rd = e.target.closest('[data-row-del]');
-      if (rd) { delIdeaRow(rd.dataset.idea, Number(rd.dataset.rowDel)); return; }
     });
 
     // 单元格编辑：失焦时写回（避免每输入一个字就重绘，导致光标丢失）
