@@ -228,20 +228,120 @@
 
   /* ============================================================
    * 渲染：进度看板
+   * 任务按阶段分列；「进行中 / 待启动」两列额外汇总
+   * 正在进行的实验与临近的里程碑，便于一屏看到全部在办事项。
    * ============================================================ */
   function renderBoard() {
     const wrap = $('#kanban');
     wrap.innerHTML = TASK_STAGES.map(stage => {
       const items = DB.tasks.filter(t => t.stage === stage.key);
       const cards = items.map(taskCardHtml).join('');
+
+      // 「进行中」列追加：进行中的实验 + 未完成里程碑；「待启动」列预告未来里程碑
+      let extra = '';
+      if (stage.key === 'doing') extra = activeWorkHtml();
+      else if (stage.key === 'todo') extra = upcomingMilestoneHtml();
+
+      const extraCount = (stage.key === 'doing') ? activeWorkCount()
+                       : (stage.key === 'todo') ? upcomingMilestoneCount() : 0;
+
       return `<div class="column" data-stage="${stage.key}">
         <div class="col-head">
           <span class="name"><i class="dot" style="background:${stage.dot}"></i>${stage.name}</span>
-          <span class="count">${items.length}</span>
+          <span class="count">${items.length + extraCount}</span>
         </div>
-        <div class="col-body" data-drop="${stage.key}">${cards}</div>
+        <div class="col-body" data-drop="${stage.key}">${cards}${extra}</div>
       </div>`;
     }).join('');
+  }
+
+  /* ---- 进行中：实验 + 里程碑 ---- */
+  function runningExperiments() {
+    // 状态为 run 的是进行中；兼容没有 status 的旧数据不纳入
+    return DB.experiments.filter(e => e.status === 'run');
+  }
+  function openMilestones() {
+    // 未完成且已过日期或 30 天内到期
+    return DB.milestones
+      .filter(m => !m.done && m.date)
+      .filter(m => daysBetween(todayISO(), m.date) <= 30)
+      .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  }
+  function activeWorkCount() {
+    return runningExperiments().length + openMilestones().length;
+  }
+  function upcomingMilestoneCount() {
+    return DB.milestones.filter(m => !m.done && m.date && daysBetween(todayISO(), m.date) > 30).length;
+  }
+
+  function activeWorkHtml() {
+    const exps = runningExperiments();
+    const ms = openMilestones();
+    if (!exps.length && !ms.length) return '';
+
+    const parts = [];
+    if (exps.length) {
+      parts.push(`<div class="mini-group-label">🧫 进行中实验 · ${exps.length}</div>`);
+      parts.push(exps.map(referCardHtml('experiment', e => {
+        const st = EXP_STATUS.find(s => s.key === e.status) || { name: '进行中', cls: 'b-run' };
+        const res = [e.metric, e.value].filter(Boolean).join('：');
+        return {
+          type: 'experiment', id: e.id, icon: '🧫',
+          title: e.title || '(未命名实验)',
+          badge: { text: st.name, cls: st.cls },
+          meta: [e.date ? `📅 ${e.date}` : '', res ? `📊 ${res}` : ''].filter(Boolean).join('　')
+        };
+      })).join(''));
+    }
+    if (ms.length) {
+      parts.push(`<div class="mini-group-label">🗓 待达成里程碑 · ${ms.length}</div>`);
+      parts.push(ms.map(referCardHtml('milestone', m => {
+        const r = relDue(m.date);
+        return {
+          type: 'milestone', id: m.id, icon: '🗓',
+          title: m.title || '(无标题)',
+          badge: { text: r.text || '未定', cls: r.cls === 'over' ? 'b-fail' : (r.cls === 'soon' ? 'b-run' : 'b-plan') },
+          meta: m.date ? `📅 ${m.date}` : ''
+        };
+      })).join(''));
+    }
+    return `<div class="mini-group">${parts.join('')}</div>`;
+  }
+
+  function upcomingMilestoneHtml() {
+    const far = DB.milestones
+      .filter(m => !m.done && m.date && daysBetween(todayISO(), m.date) > 30)
+      .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    if (!far.length) return '';
+    return `<div class="mini-group">
+      <div class="mini-group-label">🗓 后续里程碑 · ${far.length}</div>
+      ${far.map(referCardHtml('milestone', m => ({
+        type: 'milestone', id: m.id, icon: '🗓',
+        title: m.title || '(无标题)',
+        badge: { text: `${daysBetween(todayISO(), m.date)} 天后`, cls: 'b-plan' },
+        meta: `📅 ${m.date}`
+      }))).join('')}
+    </div>`;
+  }
+
+  /**
+   * 生成看板里的「引用卡片」（实验/里程碑）。
+   * 不可拖拽（阶段只能由任务决定），点击打开对应编辑弹窗。
+   */
+  function referCardHtml(type, mapFn) {
+    return (item) => {
+      const d = mapFn(item);
+      return `<div class="ref-card" data-type="${d.type}" data-id="${d.id}" title="点击编辑">
+        <div class="ref-top">
+          <span class="ref-icon">${d.icon}</span>
+          <span class="ref-title">${esc(d.title)}</span>
+        </div>
+        <div class="ref-meta">
+          <span class="badge ${d.badge.cls}">${esc(d.badge.text)}</span>
+          ${d.meta ? `<span>${esc(d.meta)}</span>` : ''}
+        </div>
+      </div>`;
+    };
   }
 
   function taskCardHtml(t) {
@@ -590,14 +690,23 @@
     }
 
     $('#capiList').innerHTML = list.map(x => {
-      const revealed = capiRevealed.has(x.id);
-      const keyBlock = x.api_key
-        ? (revealed
-            ? `<div class="capi-key-wrap"><code>${esc(x.api_key)}</code>
-                 <button class="capi-reveal" data-capi-hide="${x.id}">隐藏</button></div>`
-            : `<div class="capi-key-wrap"><code>${esc(maskKey(x.api_key))}</code>
-                 <button class="capi-reveal" data-capi-show="${x.id}">显示</button></div>`)
-        : `<span style="color:var(--muted);font-size:12.5px">（无需密钥）</span>`;
+      // 后端只会把完整密钥下发给作者本人；其余人拿到的本身就是打码串，
+      // 因此这里对非作者不提供「显示」按钮（也没有可显示的内容）。
+      const canReveal = !!x.key_visible;
+      const revealed = canReveal && capiRevealed.has(x.id);
+      let keyBlock;
+      if (!x.has_key) {
+        keyBlock = `<span style="color:var(--muted);font-size:12.5px">（无需密钥）</span>`;
+      } else if (!canReveal) {
+        keyBlock = `<div class="capi-key-wrap"><code>${esc(x.api_key)}</code>
+             <span style="font-size:11.5px;color:var(--muted)">仅贡献者可见</span></div>`;
+      } else if (revealed) {
+        keyBlock = `<div class="capi-key-wrap"><code>${esc(x.api_key)}</code>
+             <button class="capi-reveal" data-capi-hide="${x.id}">隐藏</button></div>`;
+      } else {
+        keyBlock = `<div class="capi-key-wrap"><code>${esc(maskKey(x.api_key))}</code>
+             <button class="capi-reveal" data-capi-show="${x.id}">显示</button></div>`;
+      }
 
       const tags = (x.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('');
       const author = (x.authorEmail || '').split('@')[0] || '匿名';
@@ -1287,7 +1396,10 @@
 
     // 卡片 / 任务点击编辑（拖拽的除外）
     document.addEventListener('click', e => {
-      if (e.target.closest('.task-card') || e.target.closest('.column')) return; // 看板走拖拽，不弹窗
+      // 看板内的引用卡片（实验/里程碑）可以直接点开编辑
+      const ref = e.target.closest('.ref-card');
+      if (ref) { openModal(ref.dataset.type, ref.dataset.id); return; }
+      if (e.target.closest('.task-card') || e.target.closest('.column')) return; // 任务卡走拖拽/双击
       const card = e.target.closest('[data-type][data-id]');
       if (card) openModal(card.dataset.type, card.dataset.id);
     });
