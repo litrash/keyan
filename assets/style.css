@@ -671,3 +671,68 @@ main { max-width: 1400px; margin: 0 auto; padding: 24px 26px 60px; }
   word-break: break-word; margin-top: 7px;
   display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden;
 }
+
+/* ---------- 视图切换 ---------- */
+.view-switch { display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
+.view-switch button {
+  padding: 6px 12px; border: none; background: var(--bg); color: var(--muted);
+  font-size: 12.5px; cursor: pointer; font-family: inherit; transition: .15s;
+}
+.view-switch button + button { border-left: 1px solid var(--border); }
+.view-switch button.active { background: var(--accent); color: #fff; font-weight: 600; }
+
+/* ---------- 想法卡片的操作区 ---------- */
+.idea-actions { display: flex; gap: 7px; margin-top: 11px; flex-wrap: wrap; }
+.idea-actions .btn { font-size: 12px; padding: 5px 11px; }
+
+/* ---------- 想法内嵌表格 ---------- */
+.idea-table-wrap { margin-top: 10px; }
+.idea-table-toggle {
+  border: 1px dashed var(--border); background: var(--bg); color: var(--accent);
+  font-size: 12.5px; padding: 5px 10px; border-radius: 8px; cursor: pointer;
+  font-family: inherit; width: 100%; text-align: left;
+}
+.idea-table-toggle:hover { border-color: var(--accent); }
+.idea-table-body { margin-top: 8px; }
+
+.it-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 9px; }
+.custom-table { border-collapse: collapse; width: 100%; font-size: 12.5px; min-width: 320px; }
+.custom-table th, .custom-table td {
+  border: 1px solid var(--border); padding: 6px 9px; text-align: left;
+  vertical-align: top; min-width: 72px;
+}
+.custom-table thead th { background: var(--bg); font-weight: 700; color: var(--text); }
+.custom-table td[contenteditable]:focus,
+.custom-table th[contenteditable]:focus {
+  outline: 2px solid var(--accent); outline-offset: -2px; background: var(--accent-soft);
+}
+.custom-table tfoot td { border: none; padding: 7px 4px 2px; background: none; }
+.it-op { width: 30px; text-align: center !important; }
+.it-del-row {
+  border: none; background: none; color: var(--muted); cursor: pointer;
+  font-size: 12px; padding: 1px 5px; border-radius: 5px;
+}
+.it-del-row:hover { color: var(--red); background: var(--bg); }
+.it-add-row, .it-add-col, .it-del-col {
+  font-size: 11.5px; padding: 4px 10px; margin-right: 6px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg); color: var(--muted);
+  border-radius: 7px; font-family: inherit;
+}
+.it-add-row:hover, .it-add-col:hover, .it-del-col:hover { border-color: var(--accent); color: var(--accent); }
+.it-empty { font-size: 12.5px; color: var(--muted); padding: 8px 0; }
+
+/* ---------- 想法的表格视图 ---------- */
+.idea-table-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+.idea-table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 860px; background: var(--card); }
+.idea-table th, .idea-table td {
+  border-bottom: 1px solid var(--border); padding: 10px 12px;
+  text-align: left; vertical-align: top;
+}
+.idea-table thead th { background: var(--bg); font-weight: 700; font-size: 12.5px; white-space: nowrap; }
+.idea-table tbody tr:last-child td { border-bottom: none; }
+.idea-table tbody tr:hover { background: var(--accent-soft); }
+.itc-title { font-weight: 600; min-width: 140px; }
+.itc-body { color: var(--muted); max-width: 320px; }
+.itc-table { white-space: nowrap; color: var(--muted); }
+.itc-ops { white-space: nowrap; }
+.itc-ops .btn { font-size: 11.5px; padding: 4px 9px; margin-right: 4px; }

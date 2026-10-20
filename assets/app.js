@@ -749,6 +749,27 @@
    * 保存想法 / 创新点，带状态与优先级
    * ============================================================ */
   let ideaFilter = 'all';
+  let ideaView = 'card';        // 'card' | 'table'
+  const ideaOpen = new Set();   // 卡片视图里已展开内嵌表格的想法 id
+
+  /** 把 idea.table 规范成 { columns: [], rows: [[]] }，兼容历史数据 */
+  function normTable(t) {
+    if (!t || typeof t !== 'object') return { columns: [], rows: [] };
+    const cols = Array.isArray(t.columns) ? t.columns.map(c => String(c == null ? '' : c)) : [];
+    let rows = Array.isArray(t.rows) ? t.rows : [];
+    rows = rows.filter(r => Array.isArray(r));
+    // 每行补齐到列数，避免错位
+    rows = rows.map(r => {
+      const out = r.map(c => String(c == null ? '' : c));
+      while (out.length < cols.length) out.push('');
+      return out.slice(0, Math.max(cols.length, 1));
+    });
+    return { columns: cols, rows };
+  }
+  const hasTable = (idea) => {
+    const t = normTable(idea.table);
+    return t.columns.length > 0 || t.rows.length > 0;
+  };
 
   function renderIdeas() {
     const q = ($('#ideaSearch').value || '').trim().toLowerCase();
@@ -766,7 +787,8 @@
       list = list.filter(x =>
         (x.title || '').toLowerCase().includes(q) ||
         (x.body || '').toLowerCase().includes(q) ||
-        (x.tags || []).join(' ').toLowerCase().includes(q));
+        (x.tags || []).join(' ').toLowerCase().includes(q) ||
+        normTable(x.table).rows.some(r => r.join(' ').toLowerCase().includes(q)));
     }
     // 优先级高的在前，其次按更新时间
     const rank = { P0: 0, P1: 1, P2: 2 };
@@ -783,21 +805,205 @@
         : '还没有记录想法，点右上角「记录想法」写下第一个点子。';
     }
 
+    if (ideaView === 'table') renderIdeaTable(list);
+    else renderIdeaCards(list);
+
+    renderIdeaFilters();
+  }
+
+  /* ---------- 卡片视图 ---------- */
+  function renderIdeaCards(list) {
+    $('#ideaList').className = 'cards';
     $('#ideaList').innerHTML = list.map(x => {
       const st = IDEA_STATUS.find(s => s.key === x.status) || { name: '', cls: '' };
       const pr = PRIORITIES.find(p => p.key === x.priority) || null;
       const tags = (x.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('');
-      return `<div class="card idea-card" data-type="idea" data-id="${x.id}">
+      const t = normTable(x.table);
+      const opened = ideaOpen.has(x.id);
+
+      // 内嵌表格：默认折叠，避免卡片过高
+      let tableBlock = '';
+      if (t.columns.length || t.rows.length) {
+        tableBlock = `<div class="idea-table-wrap">
+          <button class="idea-table-toggle" data-idea-toggle="${x.id}">
+            ${opened ? '▾' : '▸'} 自定义表格（${t.rows.length} 行）
+          </button>
+          <div class="idea-table-body" ${opened ? '' : 'hidden'}>
+            ${ideaTableHtml(x, t, { editable: true })}
+          </div>
+        </div>`;
+      }
+
+      return `<div class="card idea-card" data-id="${x.id}">
         <h4>${esc(x.title) || '(无标题)'} <span class="badge ${st.cls}">${esc(st.name)}</span></h4>
         ${x.body ? `<div class="idea-body">${esc(x.body)}</div>` : ''}
+        ${tableBlock}
         <div class="tags" style="margin-top:9px">
           ${pr ? `<span class="tag ${pr.cls}">${esc(pr.name)}</span>` : ''}
           ${tags}
         </div>
+        <div class="idea-actions">
+          <button class="btn ghost" data-idea-edit="${x.id}">编辑</button>
+          <button class="btn ghost" data-idea-table="${x.id}">${hasTable(x) ? '编辑表格' : '添加表格'}</button>
+          <button class="btn ghost danger" data-idea-del="${x.id}">删除</button>
+        </div>
       </div>`;
     }).join('');
+  }
 
-    renderIdeaFilters();
+  /* ---------- 表格视图（把想法铺成一张表）---------- */
+  function renderIdeaTable(list) {
+    $('#ideaList').className = 'idea-table-view';
+    if (!list.length) { $('#ideaList').innerHTML = ''; return; }
+
+    const rows = list.map(x => {
+      const st = IDEA_STATUS.find(s => s.key === x.status) || { name: '', cls: '' };
+      const pr = PRIORITIES.find(p => p.key === x.priority);
+      const t = normTable(x.table);
+      return `<tr>
+        <td class="itc-title">${esc(x.title) || '(无标题)'}</td>
+        <td><span class="badge ${st.cls}">${esc(st.name)}</span></td>
+        <td>${pr ? `<span class="tag ${pr.cls}">${esc(pr.name)}</span>` : ''}</td>
+        <td>${(x.tags || []).map(g => `<span class="tag">${esc(g)}</span>`).join(' ')}</td>
+        <td class="itc-body">${esc(x.body || '')}</td>
+        <td class="itc-table">${hasTable(x) ? `${t.rows.length} 行 × ${t.columns.length} 列` : '—'}</td>
+        <td class="itc-ops">
+          <button class="btn ghost" data-idea-edit="${x.id}">编辑</button>
+          <button class="btn ghost" data-idea-table="${x.id}">表格</button>
+        </td>
+      </tr>`;
+    }).join('');
+
+    $('#ideaList').innerHTML = `<div class="idea-table-scroll">
+      <table class="idea-table">
+        <thead><tr>
+          <th>标题</th><th>状态</th><th>优先级</th><th>标签</th><th>内容</th><th>自定义表格</th><th>操作</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }
+
+  /**
+   * 渲染一张可编辑表格。
+   * 单元格用 contenteditable，失焦时写回数据（避免每敲一个字就重绘）。
+   */
+  function ideaTableHtml(idea, t, opts) {
+    const editable = opts && opts.editable;
+    if (!t.columns.length && !t.rows.length) {
+      return `<div class="it-empty">还没有表格，点下方「＋ 添加列」开始。</div>`;
+    }
+    const head = t.columns.map((c, ci) => editable
+      ? `<th contenteditable="true" data-cell="h" data-ci="${ci}" data-idea="${idea.id}">${esc(c)}</th>`
+      : `<th>${esc(c)}</th>`).join('');
+
+    const body = t.rows.map((row, ri) => {
+      const cells = row.map((cell, ci) => editable
+        ? `<td contenteditable="true" data-cell="b" data-ri="${ri}" data-ci="${ci}" data-idea="${idea.id}">${esc(cell)}</td>`
+        : `<td>${esc(cell)}</td>`).join('');
+      return `<tr>${cells}${editable
+        ? `<td class="it-op"><button class="it-del-row" data-row-del="${ri}" data-idea="${idea.id}" title="删除本行">✕</button></td>`
+        : ''}</tr>`;
+    }).join('');
+
+    const foot = editable ? `<tfoot><tr><td colspan="${t.columns.length + 1}">
+        <button class="it-add-row" data-row-add="${idea.id}">＋ 添加行</button>
+        <button class="it-add-col" data-col-add="${idea.id}">＋ 添加列</button>
+        ${t.columns.length ? `<button class="it-del-col" data-col-del="${idea.id}" title="删除最后一列">－ 删末列</button>` : ''}
+      </td></tr></tfoot>` : '';
+
+    return `<div class="it-scroll"><table class="custom-table">
+      ${t.columns.length ? `<thead><tr>${head}${editable ? '<th class="it-op"></th>' : ''}</tr></thead>` : ''}
+      <tbody>${body}</tbody>
+      ${foot}
+    </table></div>`;
+  }
+
+  /* ---------- 想法内嵌表格的操作 ---------- */
+  function findIdea(id) { return DB.ideas.find(x => x.id === id); }
+
+  /** 打开某条想法的表格编辑器：默认给一个 2×2 空表，方便直接填 */
+  function openIdeaTableEditor(id) {
+    const idea = findIdea(id);
+    if (!idea) return;
+    let t = normTable(idea.table);
+    if (!t.columns.length && !t.rows.length) {
+      t = { columns: ['方案', '说明'], rows: [['', ''], ['', '']] };
+      idea.table = t;
+      save();
+    }
+    // 展开并滚动到该卡片
+    ideaOpen.add(id);
+    renderIdeas();
+    const card = document.querySelector(`.idea-card[data-id="${CSS.escape(id)}"]`);
+    if (card) {
+      const body = card.querySelector('.idea-table-body');
+      if (body) body.hidden = false;
+      const firstEditable = card.querySelector('[data-idea][contenteditable]');
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (firstEditable) setTimeout(() => firstEditable.focus(), 260);
+    }
+  }
+
+  function touchIdea(idea) {
+    idea.updated = new Date().toISOString();
+    save();
+    renderIdeas();
+  }
+
+  function addIdeaRow(id) {
+    const idea = findIdea(id);
+    if (!idea) return;
+    const t = normTable(idea.table);
+    const cols = t.columns.length || 1;
+    t.rows.push(new Array(cols).fill(''));
+    idea.table = t;
+    touchIdea(idea);
+  }
+
+  function addIdeaCol(id) {
+    const idea = findIdea(id);
+    if (!idea) return;
+    const t = normTable(idea.table);
+    t.columns.push(`列 ${t.columns.length + 1}`);
+    t.rows.forEach(r => r.push(''));
+    // 只有列没有行时，补一行空行，否则表体是空的
+    if (!t.rows.length) t.rows.push(new Array(t.columns.length).fill(''));
+    idea.table = t;
+    touchIdea(idea);
+  }
+
+  function delIdeaCol(id) {
+    const idea = findIdea(id);
+    if (!idea) return;
+    const t = normTable(idea.table);
+    if (!t.columns.length) return;
+    if (!confirm(`删除最后一列「${t.columns[t.columns.length - 1]}」？该列数据会一并移除。`)) return;
+    t.columns.pop();
+    t.rows.forEach(r => r.pop());
+    idea.table = t;
+    touchIdea(idea);
+  }
+
+  function delIdeaRow(id, ri) {
+    const idea = findIdea(id);
+    if (!idea) return;
+    const t = normTable(idea.table);
+    if (ri < 0 || ri >= t.rows.length) return;
+    t.rows.splice(ri, 1);
+    idea.table = t;
+    touchIdea(idea);
+  }
+
+  function deleteIdea(id) {
+    const idea = findIdea(id);
+    if (!idea) return;
+    if (!confirm(`确定删除「${idea.title || '该想法'}」？此操作不可撤销。`)) return;
+    const i = DB.ideas.findIndex(x => x.id === id);
+    if (i >= 0) DB.ideas.splice(i, 1);
+    ideaOpen.delete(id);
+    save();
+    renderIdeas();
   }
 
   function renderIdeaFilters() {
@@ -1755,6 +1961,82 @@
       if (!c) return;
       paperFilter = c.dataset.status;
       renderPaperFilters(); renderPapers();
+    });
+
+    /* ---- 奇思妙想：视图切换 ---- */
+    $('#ideaViewSwitch').addEventListener('click', e => {
+      const btn = e.target.closest('[data-idea-view]');
+      if (!btn) return;
+      ideaView = btn.dataset.ideaView;
+      $$('#ideaViewSwitch button').forEach(b =>
+        b.classList.toggle('active', b.dataset.ideaView === ideaView));
+      renderIdeas();
+    });
+
+    /* ---- 奇思妙想：卡片内操作与表格编辑 ---- */
+    $('#ideaList').addEventListener('click', e => {
+      // 展开/收起内嵌表格
+      const tg = e.target.closest('[data-idea-toggle]');
+      if (tg) {
+        const id = tg.dataset.ideaToggle;
+        if (ideaOpen.has(id)) ideaOpen.delete(id); else ideaOpen.add(id);
+        renderIdeas();
+        return;
+      }
+      // 编辑整条想法
+      const ed = e.target.closest('[data-idea-edit]');
+      if (ed) { openModal('idea', ed.dataset.ideaEdit); return; }
+      // 打开表格编辑器
+      const tb = e.target.closest('[data-idea-table]');
+      if (tb) { openIdeaTableEditor(tb.dataset.ideaTable); return; }
+      // 删除
+      const dl = e.target.closest('[data-idea-del]');
+      if (dl) { deleteIdea(dl.dataset.ideaDel); return; }
+      // 添加行
+      const ra = e.target.closest('[data-row-add]');
+      if (ra) { addIdeaRow(ra.dataset.rowAdd); return; }
+      // 添加列
+      const ca = e.target.closest('[data-col-add]');
+      if (ca) { addIdeaCol(ca.dataset.colAdd); return; }
+      // 删除最后一列
+      const cd = e.target.closest('[data-col-del]');
+      if (cd) { delIdeaCol(cd.dataset.colDel); return; }
+      // 删除某行
+      const rd = e.target.closest('[data-row-del]');
+      if (rd) { delIdeaRow(rd.dataset.idea, Number(rd.dataset.rowDel)); return; }
+    });
+
+    // 单元格编辑：失焦时写回（避免每输入一个字就重绘，导致光标丢失）
+    $('#ideaList').addEventListener('focusout', e => {
+      const cell = e.target.closest('[data-idea][contenteditable]');
+      if (!cell) return;
+      const ideaId = cell.dataset.idea;
+      const idea = DB.ideas.find(x => x.id === ideaId);
+      if (!idea) return;
+      const t = normTable(idea.table);
+      const val = cell.textContent.trim();
+
+      if (cell.dataset.cell === 'h') {
+        const ci = Number(cell.dataset.ci);
+        if (t.columns[ci] === val) return;
+        t.columns[ci] = val;
+      } else {
+        const ri = Number(cell.dataset.ri), ci = Number(cell.dataset.ci);
+        if (!t.rows[ri]) return;
+        if (t.rows[ri][ci] === val) return;
+        t.rows[ri][ci] = val;
+      }
+      idea.table = t;
+      idea.updated = new Date().toISOString();
+      save();
+    });
+
+    // 回车时结束编辑（避免换行撑破单元格）
+    $('#ideaList').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && e.target.closest('[data-idea][contenteditable]')) {
+        e.preventDefault();
+        e.target.blur();
+      }
     });
 
     // 导入导出
