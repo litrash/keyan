@@ -29,19 +29,30 @@
   };
 
   /* ---------------- 文本转义 ---------------- */
+  /* ± 是 Unicode 符号，pdfLaTeX 无法直接排版，需转成 \pm。
+     \pm 只能在数学模式使用，因此：
+       - 数学模式内（$…$ / \(…\)）直接写 \pm
+         后面紧跟字母时必须写成 \pm{}，否则会与后续字母连成别的命令
+         （例如 \pmb 是真实存在的粗体命令）
+       - 正文里用 \ensuremath{\pm}，花括号天然起到分隔作用 */
+  function pmInMath(p) {
+    return p.replace(/±(?=[A-Za-z])/g, '\\pm{}').replace(/±/g, '\\pm');
+  }
+
   function escapeText(s, opts) {
     s = String(s == null ? '' : s).replace(/\r?\n/g, ' ');
     if (!opts.escape) return s;
     var parts = s.split(/(\$[^$]*\$)/g);
     return parts.map(function (p) {
-      if (/^\$[^$]*\$$/.test(p)) return p;                    /* 数学模式原样保留 */
-      if (/^\\\(.*\\\)$/.test(p)) return p;
-      if (opts.preserveCommands && p.indexOf('\\') >= 0) return p;
+      if (/^\$[^$]*\$$/.test(p)) return pmInMath(p);              /* 数学模式 */
+      if (/^\\\(.*\\\)$/.test(p)) return pmInMath(p);
+      if (opts.preserveCommands && p.indexOf('\\') >= 0) return p.replace(/±/g, '\\ensuremath{\\pm}');
       return p
         .replace(/\\/g, '\\textbackslash{}')
         .replace(/([&%$#_{}])/g, '\\$1')
         .replace(/~/g, '\\textasciitilde{}')
-        .replace(/\^/g, '\\textasciicircum{}');
+        .replace(/\^/g, '\\textasciicircum{}')
+        .replace(/±/g, '\\ensuremath{\\pm}');
     }).join('');
   }
 

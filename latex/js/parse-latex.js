@@ -171,8 +171,15 @@
   function unescapeText(s) {
     var parts = String(s).split(/(\$[^$]*\$)/g);
     return parts.map(function (p) {
-      if (/^\$[^$]*\$$/.test(p)) return p;
+      /* 数学模式：\pm（含 \pm{} 形式）还原成 ±，保证「生成→解析→再生成」一致 */
+      if (/^\$[^$]*\$$/.test(p)) {
+        return p.replace(/\\pm\{\}/g, '±').replace(/\\pm(?![a-zA-Z])/g, '±');
+      }
       return p
+        /* 先还原 \ensuremath{\pm} / \pm{}，否则会被后面的 \pm 规则拆坏 */
+        .replace(/\\ensuremath\{\\pm\}/g, '±')
+        .replace(/\\pm\{\}/g, '±')
+        .replace(/\\pm(?![a-zA-Z])/g, '±')
         .replace(/\\textbackslash\{\}/g, '\\')
         .replace(/\\textasciitilde\{\}/g, '~')
         .replace(/\\textasciicircum\{\}/g, '^')
