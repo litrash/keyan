@@ -663,6 +663,24 @@ main { max-width: 1400px; margin: 0 auto; padding: 24px 26px 60px; }
 .write-meta b { color: var(--accent); font-size: 14px; font-weight: 800; }
 
 /* ============================================================
+   LaTeX 表格编辑器（iframe 嵌入）
+   编辑器是独立应用，用自己的 CSS 与 localStorage，这里只负责容器尺寸。
+   ============================================================ */
+.latex-frame-wrap {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  overflow: hidden; background: var(--card); box-shadow: var(--shadow);
+  /* 留出顶栏 + 页脚的高度，让编辑器接近全屏可用 */
+  height: calc(100vh - 260px);
+  min-height: 520px;
+}
+.latex-frame-wrap iframe {
+  display: block; width: 100%; height: 100%; border: 0; background: #fff;
+}
+@media (max-width: 900px) {
+  .latex-frame-wrap { height: calc(100vh - 220px); min-height: 460px; }
+}
+
+/* ============================================================
    奇思妙想
    ============================================================ */
 .idea-card { border-left: 3px solid var(--orange); }

@@ -1423,6 +1423,19 @@
   }
 
   /* ============================================================
+   * LaTeX 表格编辑器（iframe 懒加载）
+   * 独立应用，共用不了状态；首次切到该板块时才注入 src。
+   * ============================================================ */
+  function loadLatexFrame() {
+    const f = $('#latexFrame');
+    if (!f) return;
+    if (!f.getAttribute('src')) {
+      const src = f.dataset.src;
+      if (src) f.setAttribute('src', src);
+    }
+  }
+
+  /* ============================================================
    * 渲染：时间线
    * ============================================================ */
   function renderTimeline() {
@@ -1878,6 +1891,7 @@
     if (name === 'journal') renderJournal();
     if (name === 'writing') renderWritings();
     if (name === 'ideas') renderIdeas();
+    if (name === 'latex') loadLatexFrame();
     if (name === 'community') fetchCommunity(true);
   }
 
@@ -2259,6 +2273,11 @@
 
     /* ---- 退出登录（设置里那个） ---- */
     $('#btnLogout2').addEventListener('click', doLogout);
+
+    /* ---- LaTeX 编辑器：新标签页打开 ---- */
+    $('#btnLatexNewTab').addEventListener('click', () => {
+      window.open('latex/index.html', '_blank', 'noopener');
+    });
 
     /* ---- 主题变化时重绘图表（颜色随主题变） ---- */
     document.addEventListener('themechange', () => {

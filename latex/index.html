@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LaTeX 表格编辑器 · 本地离线版</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232f6fed'/%3E%3Cg fill='%23fff'%3E%3Crect x='6' y='8' width='20' height='3'/%3E%3Crect x='6' y='14.5' width='20' height='3'/%3E%3Crect x='6' y='21' width='20' height='3'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles/app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo" aria-hidden="true">▦</span>
+    <span class="brand-name">LaTeX 表格编辑器</span>
+    <span class="badge">本地离线版</span>
+  </div>
+
+  <nav class="menubar" id="menubar">
+    <button class="menubtn" data-menu="file">文件 ▾</button>
+    <button class="menubtn" data-menu="table">表格 ▾</button>
+    <button class="menubtn" data-menu="output">输出 ▾</button>
+    <button class="menubtn" data-menu="help">帮助 ▾</button>
+  </nav>
+
+  <div class="topbar-right">
+    <button class="iconbtn" data-act="undo" title="撤销 (Ctrl+Z)">↶</button>
+    <button class="iconbtn" data-act="redo" title="重做 (Ctrl+Y)">↷</button>
+    <button class="iconbtn" data-act="toggleTheme" title="切换深色/浅色">◐</button>
+  </div>
+</header>
+
+<main class="layout">
+
+  <!-- ============ 左侧面板 ============ -->
+  <aside class="side">
+    <div class="tabs" role="tablist">
+      <button class="tab is-active" data-tab="table">表格</button>
+      <button class="tab" data-tab="rows">行列</button>
+      <button class="tab" data-tab="cell">单元格</button>
+      <button class="tab" data-tab="border">边框</button>
+      <button class="tab" data-tab="opt">选项</button>
+    </div>
+
+    <div class="panes">
+
+      <section class="pane is-active" data-pane="table">
+        <div class="group">
+          <h4>文件</h4>
+          <div class="btns">
+            <button data-act="new">新建表格…</button>
+            <button data-act="openJson">打开 JSON…</button>
+            <button data-act="saveJson">保存 JSON</button>
+          </div>
+        </div>
+        <div class="group">
+          <h4>导入</h4>
+          <div class="btns">
+            <button data-act="import">导入（LaTeX/CSV/Markdown/HTML）…</button>
+            <button data-act="pasteTable">粘贴表格…</button>
+            <button data-act="loadFile">从文件载入（.tex/.csv/.md/.xlsx）…</button>
+          </div>
+        </div>
+        <div class="group">
+          <h4>表格操作</h4>
+          <div class="btns">
+            <button data-act="transpose">转置（行列互换）</button>
+            <button data-act="clearSel">清空选区内容</button>
+            <button data-act="selectAll">全选</button>
+            <button data-act="find">查找与替换…</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="pane" data-pane="rows">
+        <div class="group">
+          <h4>行</h4>
+          <div class="btns">
+            <button data-act="rowAbove">在上方插入行</button>
+            <button data-act="rowBelow">在下方插入行</button>
+            <button data-act="rowDelete" class="danger">删除行</button>
+          </div>
+        </div>
+        <div class="group">
+          <h4>列</h4>
+          <div class="btns">
+            <button data-act="colBefore">在左侧插入列</button>
+            <button data-act="colAfter">在右侧插入列</button>
+            <button data-act="colDelete" class="danger">删除列</button>
+          </div>
+        </div>
+        <div class="group">
+          <h4>列对齐</h4>
+          <div class="btns seg">
+            <button data-act="colAlign" data-v="l">左对齐 (l)</button>
+            <button data-act="colAlign" data-v="c">居中 (c)</button>
+            <button data-act="colAlign" data-v="r">右对齐 (r)</button>
+          </div>
+          <p class="hint">作用于选区覆盖的所有列；也可点击表格列头上的 l/c/r 按钮逐列切换。</p>
+        </div>
+      </section>
+
+      <section class="pane" data-pane="cell">
+        <div class="group">
+          <h4>文字样式</h4>
+          <div class="btns seg tight">
+            <button data-act="fmt" data-v="b" title="加粗 (Ctrl+B)"><b>B</b></button>
+            <button data-act="fmt" data-v="i" title="斜体 (Ctrl+I)"><i>I</i></button>
+            <button data-act="fmt" data-v="u" title="下划线 (Ctrl+U)"><u>U</u></button>
+            <button data-act="fmt" data-v="s" title="删除线"><s>S</s></button>
+            <button data-act="fmt" data-v="sup" title="上标">x²</button>
+            <button data-act="fmt" data-v="sub" title="下标">x₂</button>
+          </div>
+          <div class="btns">
+            <button data-act="footnote">插入脚注 \footnote</button>
+            <button data-act="math">插入行内公式 $…$</button>
+            <button data-act="clearFmt">清除格式</button>
+          </div>
+        </div>
+        <div class="group">
+          <h4>对齐</h4>
+          <div class="btns seg">
+            <button data-act="cellAlign" data-v="">默认</button>
+            <button data-act="cellAlign" data-v="l">左</button>
+            <button data-act="cellAlign" data-v="c">中</button>
+            <button data-act="cellAlign" data-v="r">右</button>
+          </div>
+        </div>
+        <div class="group">
+          <h4>颜色</h4>
+          <div class="btns">
+            <button data-act="bg">背景色…</button>
+            <button data-act="fg">文字色…</button>
+            <button data-act="clearColor">清除颜色</button>
+          </div>
+        </div>
+        <div class="group">
+          <h4>合并</h4>
+          <div class="btns">
+            <button data-act="mergeH">水平合并</button>
+            <button data-act="mergeV">垂直合并</button>
+            <button data-act="mergeAll">合并矩形区域</button>
+            <button data-act="split">拆分单元格</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="pane" data-pane="border">
+        <div class="group">
+          <h4>横线（置于选中单元格上/下边界）</h4>
+          <div class="btns">
+            <button data-act="borderTop">上边框</button>
+            <button data-act="borderBottom">下边框</button>
+            <button data-act="borderClearTop">清除上边框</button>
+            <button data-act="borderClearBottom">清除下边框</button>
+          </div>
+        </div>
+        <div class="group">
+          <h4>线型（作用于下一次或已选单元格）</h4>
+          <div class="rulelist" id="ruleList"></div>
+        </div>
+        <div class="group">
+          <h4>竖线（列分隔线）</h4>
+          <div class="btns">
+            <button data-act="vlineToggle">切换选区左右竖线</button>
+            <button data-act="vlineOff">清除所有竖线</button>
+          </div>
+          <p class="hint">LaTeX 的竖线属于列格式（colspec 中的 <code>|</code>），因此是整列生效。</p>
+        </div>
+        <div class="group">
+          <h4>快捷方案</h4>
+          <div class="btns">
+            <button data-act="booktabs">自动三线表</button>
+            <button data-act="allBorders">全部边框</button>
+            <button data-act="noBorders">清除全部边框</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="pane" data-pane="opt">
+        <div class="group">
+          <h4>自适应页面（仅 LaTeX）</h4>
+          <label class="row"><span>宽度适配</span>
+            <select data-opt="fit">
+              <option value="none">不处理</option>
+              <option value="scale">缩放整体（adjustbox 限宽）</option>
+              <option value="tabularx">自动列宽（tabularx）</option>
+            </select>
+          </label>
+          <label class="row"><span>字号</span>
+            <select data-opt="fontsize">
+              <option value="">默认</option>
+              <option value="\small">\small</option>
+              <option value="\footnotesize">\footnotesize</option>
+              <option value="\scriptsize">\scriptsize</option>
+              <option value="\tiny">\tiny</option>
+            </select>
+          </label>
+          <label class="chk"><input type="checkbox" data-opt="centering"> 表格居中（\centering）</label>
+          <label class="chk"><input type="checkbox" data-opt="landscape"> 横向页面（landscape）</label>
+          <label class="chk"><input type="checkbox" data-opt="float"> 作为浮动体（table）</label>
+          <label class="chk"><input type="checkbox" data-opt="longtable"> 允许跨页（longtable）</label>
+          <label class="row"><span>标题</span><input type="text" data-opt="caption" placeholder="caption 内容"></label>
+          <label class="row"><span>标签</span><input type="text" data-opt="label" placeholder="tab:my-table"></label>
+        </div>
+        <div class="group">
+          <h4>代码输出</h4>
+          <label class="chk"><input type="checkbox" data-opt="escape"> 转义特殊字符（&amp; % $ # _ { } ~ ^ \）</label>
+          <label class="chk"><input type="checkbox" data-opt="preserveCommands"> 不转义已输入的 LaTeX 命令（BETA）</label>
+          <label class="chk"><input type="checkbox" data-opt="compact"> 横线与被删空白紧凑输出</label>
+        </div>
+        <div class="group">
+          <h4>数据</h4>
+          <div class="btns">
+            <button data-act="clearAll" class="danger">清空整个表格</button>
+            <button data-act="resetOptions">恢复默认选项</button>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </aside>
+
+  <!-- ============ 中间：编辑器 ============ -->
+  <section class="editor">
+    <div class="gridbar">
+      <div class="gb-group">
+        <button class="iconbtn" data-act="fmt" data-v="b" title="加粗"><b>B</b></button>
+        <button class="iconbtn" data-act="fmt" data-v="i" title="斜体"><i>I</i></button>
+        <button class="iconbtn" data-act="fmt" data-v="u" title="下划线"><u>U</u></button>
+        <button class="iconbtn" data-act="fmt" data-v="s" title="删除线"><s>S</s></button>
+        <button class="iconbtn" data-act="fmt" data-v="sup" title="上标">x²</button>
+        <button class="iconbtn" data-act="fmt" data-v="sub" title="下标">x₂</button>
+      </div>
+      <div class="gb-sep"></div>
+      <div class="gb-group">
+        <button class="iconbtn" data-act="rowAbove" title="上方插入行">＋行↑</button>
+        <button class="iconbtn" data-act="rowBelow" title="下方插入行">＋行↓</button>
+        <button class="iconbtn" data-act="colBefore" title="左侧插入列">＋列←</button>
+        <button class="iconbtn" data-act="colAfter" title="右侧插入列">＋列→</button>
+        <button class="iconbtn" data-act="rowDelete" title="删除行">－行</button>
+        <button class="iconbtn" data-act="colDelete" title="删除列">－列</button>
+      </div>
+      <div class="gb-sep"></div>
+      <div class="gb-group">
+        <button class="iconbtn" data-act="mergeH" title="水平合并">⇄ 合并</button>
+        <button class="iconbtn" data-act="mergeV" title="垂直合并">⇅ 合并</button>
+        <button class="iconbtn" data-act="split" title="拆分">拆分</button>
+      </div>
+      <div class="gb-sep"></div>
+      <div class="gb-group">
+        <button class="iconbtn" data-act="cellAlign" data-v="l" title="左对齐">⇤</button>
+        <button class="iconbtn" data-act="cellAlign" data-v="c" title="居中">↔</button>
+        <button class="iconbtn" data-act="cellAlign" data-v="r" title="右对齐">⇥</button>
+        <button class="iconbtn" data-act="bg" title="背景色">🎨 底色</button>
+        <button class="iconbtn" data-act="booktabs" title="自动三线表">三线表</button>
+      </div>
+      <div class="gb-spacer"></div>
+      <div class="gb-group">
+        <span class="dims" id="dims">3 × 3</span>
+      </div>
+    </div>
+
+    <div class="grid-wrap" id="gridWrap">
+      <table class="grid" id="grid"></table>
+    </div>
+
+    <div class="statusbar">
+      <span id="statusSel">已选 1 个单元格</span>
+      <span class="dot">·</span>
+      <span>点击单元格直接输入；Ctrl+点击多选，Shift+点击连续选区，Enter 下移，Tab 右移</span>
+      <span class="gb-spacer"></span>
+      <span class="autosave" id="autosave">已自动保存</span>
+    </div>
+  </section>
+
+  <!-- ============ 右侧：输出 ============ -->
+  <section class="output">
+    <div class="outbar">
+      <select id="format">
+        <optgroup label="LaTeX 系列">
+          <option value="latex">LaTeX（tabular）</option>
+          <option value="tabularray">LaTeX（tabularray / tblr）</option>
+          <option value="mwe">LaTeX 完整文档（MWE）</option>
+          <option value="context">ConTeXt</option>
+          <option value="plaintex">Plain TeX</option>
+        </optgroup>
+        <optgroup label="标记语言">
+          <option value="markdown">Markdown</option>
+          <option value="textile">Textile</option>
+          <option value="typst">Typst</option>
+        </optgroup>
+        <optgroup label="网页">
+          <option value="html">HTML</option>
+          <option value="bbcode">BBCode</option>
+          <option value="wikicode">Wikicode</option>
+        </optgroup>
+        <optgroup label="数据">
+          <option value="csv">CSV</option>
+          <option value="tsv">TSV</option>
+          <option value="json">JSON（工程文件）</option>
+        </optgroup>
+      </select>
+      <div class="gb-spacer"></div>
+      <button class="btn2" data-act="copy">复制</button>
+      <button class="btn2" data-act="download">下载</button>
+    </div>
+
+    <pre class="code" id="code" spellcheck="false"></pre>
+
+    <div class="outfoot">
+      <div class="pkgs" id="pkgs"></div>
+      <div class="log" id="log"></div>
+    </div>
+  </section>
+</main>
+
+<div class="modal-root" id="modalRoot" hidden></div>
+<div class="popover-root" id="popoverRoot" hidden></div>
+<div class="toast-root" id="toastRoot"></div>
+<input type="file" id="fileInput" hidden>
+
+<script src="js/core.js"></script>
+<script src="js/selection.js"></script>
+<script src="js/ops.js"></script>
+<script src="js/emit-latex.js"></script>
+<script src="js/emit-other.js"></script>
+<script src="js/parse-latex.js"></script>
+<script src="js/parse-data.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/grid.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>科研进度管理</title>
-<link rel="stylesheet" href="assets/style.css?v=20261007i">
+<link rel="stylesheet" href="assets/style.css?v=20261020a">
 </head>
 <body>
 
@@ -22,6 +22,7 @@
     <button class="tab-btn" data-tab="papers">📚 论文文献</button>
     <button class="tab-btn" data-tab="writing">✍️ 写作进度</button>
     <button class="tab-btn" data-tab="ideas">💡 奇思妙想</button>
+    <button class="tab-btn" data-tab="latex">📐 LaTeX 表格</button>
     <button class="tab-btn" data-tab="journal">📔 日记</button>
     <button class="tab-btn" data-tab="community">🔌 最新 API 贡献</button>
     <button class="tab-btn" data-tab="timeline">🗓 时间线</button>
@@ -104,6 +105,30 @@
     <div class="filters" id="ideaFilters"></div>
     <div class="cards" id="ideaList"></div>
     <div class="empty" id="ideaEmpty" hidden>还没有记录想法，点右上角「记录想法」写下第一个点子。</div>
+  </section>
+
+  <!-- ================= LaTeX 表格编辑器（iframe 嵌入） ================= -->
+  <section class="panel" id="panel-latex">
+    <div class="panel-head">
+      <h2>LaTeX 表格编辑器</h2>
+      <div class="head-tools">
+        <span class="hint" style="font-size:12.5px;color:var(--muted)">
+          所见即所得编辑，实时生成 LaTeX / Typst / Markdown / CSV 等代码
+        </span>
+        <button class="btn ghost" id="btnLatexNewTab" title="在新标签页打开">↗ 新标签页打开</button>
+      </div>
+    </div>
+    <div class="latex-frame-wrap">
+      <iframe id="latexFrame"
+              title="LaTeX 表格编辑器"
+              data-src="latex/index.html"
+              loading="lazy"
+              referrerpolicy="no-referrer"></iframe>
+    </div>
+    <div class="hint" style="margin-top:10px;font-size:12.5px;color:var(--muted)">
+      该编辑器为独立应用，表格数据保存在本浏览器（键名 <code>lt-editor-doc-v1</code>），
+      不随账号同步。长期存档请用编辑器内的「保存 JSON」。
+    </div>
   </section>
 
   <!-- ================= 日记 ================= -->
@@ -339,9 +364,9 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <!-- 资源带版本号：避免浏览器命中旧缓存导致新功能不生效。
      每次改动 assets 下的文件后，把下面的 ?v= 值改一下即可强制刷新。 -->
-<script src="assets/theme.js?v=20261007i"></script>
-<script src="assets/pomodoro.js?v=20261007i"></script>
-<script src="assets/cloud.js?v=20261007i"></script>
-<script src="assets/app.js?v=20261007i"></script>
+<script src="assets/theme.js?v=20261020a"></script>
+<script src="assets/pomodoro.js?v=20261020a"></script>
+<script src="assets/cloud.js?v=20261020a"></script>
+<script src="assets/app.js?v=20261020a"></script>
 </body>
 </html>
