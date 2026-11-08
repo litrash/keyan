@@ -2276,7 +2276,7 @@
 
     /* ---- LaTeX 编辑器：新标签页打开 ---- */
     $('#btnLatexNewTab').addEventListener('click', () => {
-      window.open('latex/index.html?v=20261020b', '_blank', 'noopener');
+      window.open('latex/index.html?v=20261020c', '_blank', 'noopener');
     });
 
     /* ---- 主题变化时重绘图表（颜色随主题变） ---- */

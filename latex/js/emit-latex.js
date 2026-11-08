@@ -30,13 +30,22 @@
 
   /* ---------------- 文本转义 ---------------- */
   /* ± 是 Unicode 符号，pdfLaTeX 无法直接排版，需转成 \pm。
-     \pm 只能在数学模式使用，因此：
-       - 数学模式内（$…$ / \(…\)）直接写 \pm
-         后面紧跟字母时必须写成 \pm{}，否则会与后续字母连成别的命令
-         （例如 \pmb 是真实存在的粗体命令）
-       - 正文里用 \ensuremath{\pm}，花括号天然起到分隔作用 */
+     转换规则：
+       - 正文里：± → $\pm$（局部进入数学模式，前后文字仍是正文）
+         例：0.4226 ± 0.2647  →  0.4226 $\pm$ 0.2647
+       - 已在数学模式（$…$ / \(…\)）内：± → \pm
+         紧跟字母时写 \pm{}，否则会与后续字母连成别的命令
+         （例如 \pmb 是真实存在的粗体命令） */
   function pmInMath(p) {
     return p.replace(/±(?=[A-Za-z])/g, '\\pm{}').replace(/±/g, '\\pm');
+  }
+
+  function escapePlain(p) {
+    return p
+      .replace(/\\/g, '\\textbackslash{}')
+      .replace(/([&%$#_{}])/g, '\\$1')
+      .replace(/~/g, '\\textasciitilde{}')
+      .replace(/\^/g, '\\textasciicircum{}');
   }
 
   function escapeText(s, opts) {
@@ -44,15 +53,10 @@
     if (!opts.escape) return s;
     var parts = s.split(/(\$[^$]*\$)/g);
     return parts.map(function (p) {
-      if (/^\$[^$]*\$$/.test(p)) return pmInMath(p);              /* 数学模式 */
+      if (/^\$[^$]*\$$/.test(p)) return pmInMath(p);              /* 数学模式内 */
       if (/^\\\(.*\\\)$/.test(p)) return pmInMath(p);
-      if (opts.preserveCommands && p.indexOf('\\') >= 0) return p.replace(/±/g, '\\ensuremath{\\pm}');
-      return p
-        .replace(/\\/g, '\\textbackslash{}')
-        .replace(/([&%$#_{}])/g, '\\$1')
-        .replace(/~/g, '\\textasciitilde{}')
-        .replace(/\^/g, '\\textasciicircum{}')
-        .replace(/±/g, '\\ensuremath{\\pm}');
+      if (opts.preserveCommands && p.indexOf('\\') >= 0) return p.replace(/±/g, '$\\pm$');
+      return escapePlain(p).replace(/±/g, '$\\pm$');              /* 正文：包成 $\pm$ */
     }).join('');
   }
 

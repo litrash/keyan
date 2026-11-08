@@ -168,11 +168,16 @@
   }
 
   /* 与生成端 escapeText 互为逆操作：把 \& 之类还原成字符 */
+  /* 生成端把正文里的 ± 输出成 $\pm$。这里做对称还原：
+     若某个数学片段就是单独的 \pm（即 $\pm$），直接还原成 ±，
+     使单元格文本回到 0.4226 ± 0.2647，保证往返一致且不残留 $…$。 */
   function unescapeText(s) {
     var parts = String(s).split(/(\$[^$]*\$)/g);
     return parts.map(function (p) {
-      /* 数学模式：\pm（含 \pm{} 形式）还原成 ±，保证「生成→解析→再生成」一致 */
       if (/^\$[^$]*\$$/.test(p)) {
+        var inner = p.slice(1, -1);
+        if (/^\s*\\pm(?:\{\})?\s*$/.test(inner)) return '±';   /* $\pm$ 或 $\pm{}$ → ± */
+        /* 其它数学内容：\pm（含 \pm{}）还原成 ±，其余保持 */
         return p.replace(/\\pm\{\}/g, '±').replace(/\\pm(?![a-zA-Z])/g, '±');
       }
       return p
