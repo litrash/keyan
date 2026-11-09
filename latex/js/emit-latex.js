@@ -50,6 +50,9 @@
 
   function escapeText(s, opts) {
     s = String(s == null ? '' : s).replace(/\r?\n/g, ' ');
+    /* 去除空格：勾选后单元格内容里的空白全部删掉
+       （例 0.4226 ± 0.2647 → 0.4226$\pm$0.2647） */
+    if (opts.noSpace) s = s.replace(/\s+/g, '');
     if (!opts.escape) return s;
     var parts = s.split(/(\$[^$]*\$)/g);
     return parts.map(function (p) {

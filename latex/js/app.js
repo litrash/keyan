@@ -211,6 +211,7 @@
       if (el.type === 'checkbox') el.checked = !!o[k];
       else el.value = o[k] == null ? '' : o[k];
     });
+    syncNoSpaceBtn();
   }
 
   /* =================== 动作表 =================== */
@@ -222,6 +223,19 @@
   actions.toggleTheme = function () {
     var cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     setTheme(cur);
+  };
+
+  /* 去除空格：按钮一键开关，与「选项 → 代码输出」里的勾选框同一个状态 */
+  function syncNoSpaceBtn() {
+    var b = document.getElementById('btnNoSpace');
+    if (b) b.classList.toggle('is-on', !!state.doc.options.noSpace);
+  }
+  actions.noSpace = function () {
+    state.doc.options.noSpace = !state.doc.options.noSpace;
+    syncOptionInputs();
+    syncNoSpaceBtn();
+    renderCode();
+    saveSoon();
   };
 
   actions.new = function () {
@@ -723,6 +737,7 @@
       var handler = function () {
         var key = el.dataset.opt;
         state.doc.options[key] = el.type === 'checkbox' ? el.checked : el.value;
+        syncNoSpaceBtn();
         renderCode();
         saveSoon();
       };

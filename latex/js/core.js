@@ -161,7 +161,8 @@
       label: '',
       escape: true,
       preserveCommands: false,
-      compact: false
+      compact: false,
+      noSpace: false        // 去除空格：输出里不保留空格
     };
   };
 

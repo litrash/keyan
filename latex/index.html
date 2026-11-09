@@ -208,6 +208,7 @@
           <label class="chk"><input type="checkbox" data-opt="escape"> 转义特殊字符（&amp; % $ # _ { } ~ ^ \）</label>
           <label class="chk"><input type="checkbox" data-opt="preserveCommands"> 不转义已输入的 LaTeX 命令（BETA）</label>
           <label class="chk"><input type="checkbox" data-opt="compact"> 横线与被删空白紧凑输出</label>
+          <label class="chk"><input type="checkbox" data-opt="noSpace"> 去除空格（单元格内容中的空格全部删掉）</label>
         </div>
         <div class="group">
           <h4>数据</h4>
@@ -254,6 +255,11 @@
         <button class="iconbtn" data-act="cellAlign" data-v="r" title="右对齐">⇥</button>
         <button class="iconbtn" data-act="bg" title="背景色">🎨 底色</button>
         <button class="iconbtn" data-act="booktabs" title="自动三线表">三线表</button>
+      </div>
+      <div class="gb-sep"></div>
+      <div class="gb-group">
+        <button class="iconbtn" data-act="noSpace" id="btnNoSpace"
+                title="去除空格：勾选后输出不保留空格（0.4226 ± 0.2647 → 0.4226$\pm$0.2647）">␣ 去空格</button>
       </div>
       <div class="gb-spacer"></div>
       <div class="gb-group">
@@ -320,15 +326,15 @@
 <div class="toast-root" id="toastRoot"></div>
 <input type="file" id="fileInput" hidden>
 
-<script src="js/core.js?v=20261020c"></script>
-<script src="js/selection.js?v=20261020c"></script>
-<script src="js/ops.js?v=20261020c"></script>
-<script src="js/emit-latex.js?v=20261020c"></script>
-<script src="js/emit-other.js?v=20261020c"></script>
-<script src="js/parse-latex.js?v=20261020c"></script>
-<script src="js/parse-data.js?v=20261020c"></script>
-<script src="js/ui.js?v=20261020c"></script>
-<script src="js/grid.js?v=20261020c"></script>
-<script src="js/app.js?v=20261020c"></script>
+<script src="js/core.js?v=20261020d"></script>
+<script src="js/selection.js?v=20261020d"></script>
+<script src="js/ops.js?v=20261020d"></script>
+<script src="js/emit-latex.js?v=20261020d"></script>
+<script src="js/emit-other.js?v=20261020d"></script>
+<script src="js/parse-latex.js?v=20261020d"></script>
+<script src="js/parse-data.js?v=20261020d"></script>
+<script src="js/ui.js?v=20261020d"></script>
+<script src="js/grid.js?v=20261020d"></script>
+<script src="js/app.js?v=20261020d"></script>
 </body>
 </html>
