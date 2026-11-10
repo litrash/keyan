@@ -1892,6 +1892,7 @@
     if (name === 'writing') renderWritings();
     if (name === 'ideas') renderIdeas();
     if (name === 'latex') loadLatexFrame();
+    if (name === 'crop' && window.CropTool) window.CropTool.init();
     if (name === 'community') fetchCommunity(true);
   }
 
