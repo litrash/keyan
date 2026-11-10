@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>科研进度管理</title>
-<link rel="stylesheet" href="assets/style.css?v=20261021a">
+<link rel="stylesheet" href="assets/style.css?v=20261021c">
 </head>
 <body>
 
@@ -149,7 +149,7 @@
       <div class="crop-drop-icon">🖼</div>
       <p><b>把图片拖到这里</b>，或 <button class="btn ghost" id="cropPick2">点击选择文件</button></p>
       <p class="crop-drop-sub">也可以直接 <kbd>Ctrl</kbd>+<kbd>V</kbd> 粘贴剪贴板里的图片</p>
-      <input type="file" id="cropFile" accept="image/*,.svg,.ico,.bmp" hidden>
+      <input type="file" id="cropFile" accept="image/*,.svg,.ico,.bmp,.eps,.epsf,.epsi,.ps" hidden>
     </div>
 
     <!-- 裁剪工作区 -->
@@ -219,6 +219,7 @@
                 <option value="image/png">PNG（无损，支持透明）</option>
                 <option value="image/jpeg">JPEG（有损，体积小）</option>
                 <option value="image/webp">WebP（现代格式）</option>
+                <option value="eps">EPS（LaTeX / 投稿用矢量封装）</option>
               </select>
             </label>
           </div>
@@ -477,10 +478,11 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <!-- 资源带版本号：避免浏览器命中旧缓存导致新功能不生效。
      每次改动 assets 下的文件后，把下面的 ?v= 值改一下即可强制刷新。 -->
-<script src="assets/theme.js?v=20261021a"></script>
-<script src="assets/pomodoro.js?v=20261021a"></script>
-<script src="assets/cloud.js?v=20261021a"></script>
-<script src="assets/crop.js?v=20261021a"></script>
-<script src="assets/app.js?v=20261021a"></script>
+<script src="assets/theme.js?v=20261021c"></script>
+<script src="assets/pomodoro.js?v=20261021c"></script>
+<script src="assets/cloud.js?v=20261021c"></script>
+<script src="assets/eps.js?v=20261021c"></script>
+<script src="assets/crop.js?v=20261021c"></script>
+<script src="assets/app.js?v=20261021c"></script>
 </body>
 </html>

@@ -39,12 +39,26 @@
   function extFor(mime) {
     if (mime === 'image/jpeg') return 'jpg';
     if (mime === 'image/webp') return 'webp';
+    if (mime === 'eps') return 'eps';
     return 'png';
   }
+  const isEpsFormat = () => S.format === 'eps';
 
   /* ---------------- 载入图片 ---------------- */
   function loadFile(file) {
     if (!file) return;
+
+    /* EPS / PS 走 PostScript 解码路径 */
+    const looksEps = /\.(eps|epsf|epsi|ps)$/i.test(file.name || '') ||
+      file.type === 'application/postscript' || file.type === 'image/x-eps';
+    if (looksEps) {
+      const fr = new FileReader();
+      fr.onload = () => loadEps(fr.result, file.name);
+      fr.onerror = () => toast('读取 EPS 文件失败');
+      fr.readAsArrayBuffer(file);
+      return;
+    }
+
     if (!/^image\//.test(file.type) && !/\.(svg|ico|bmp|avif)$/i.test(file.name || '')) {
       toast('这个文件看起来不是图片：' + (file.name || file.type));
       return;
@@ -71,6 +85,31 @@
       toast('浏览器无法解码这个图片格式：' + (file.name || file.type));
     };
     im.src = url;
+  }
+
+  /* EPS 走专门的解码路径（浏览器不能直接渲染 PostScript） */
+  function loadEps(arrayBuffer, fileName) {
+    if (!window.EPS) { toast('EPS 模块未加载'); return; }
+    S.fileName = baseName(fileName);
+    const bytes = new Uint8Array(arrayBuffer);
+    const srcName = { postscript: '矢量解释器', epsi: 'EPSI 内嵌预览', tiff: 'TIFF 内嵌预览' };
+
+    toast('正在解析 EPS…');
+    Promise.resolve()
+      .then(() => window.EPS.decode(bytes, {}))
+      .then((res) => {
+        adoptSource(res.canvas);
+        const via = srcName[res.source] || res.source;
+        const extra = res.notes && res.notes.length ? '　' + res.notes[res.notes.length - 1] : '';
+        toast('EPS 已载入（' + via + '，' + res.canvas.width + '×' + res.canvas.height + '）' + extra);
+        const info = document.getElementById('cropInfo');
+        if (info) info.dataset.eps = res.source;
+        S.epsSource = res.source;
+      })
+      .catch((e) => {
+        const msg = String(e && e.message ? e.message : e);
+        toast(msg);
+      });
   }
 
   /* 把一张画布作为新的源图（旋转也走这里） */
@@ -346,6 +385,13 @@
     tag.textContent = `${c.width} × ${c.height}px`;
     box.appendChild(tag);
 
+    if (isEpsFormat()) {
+      S.lastBlob = null;
+      $('#cropHint').textContent =
+        `输出 ${c.width} × ${c.height}pt　EPS（点下方按钮时生成，矢量封装内嵌位图）`;
+      return;
+    }
+
     c.toBlob((blob) => {
       S.lastBlob = blob;
       if (blob) {
@@ -359,17 +405,31 @@
   function download() {
     const c = cropCanvas();
     if (!c) { toast('还没有选区'); return; }
+
+    if (isEpsFormat()) {
+      if (!window.EPS) { toast('EPS 模块未加载'); return; }
+      const name = `${S.fileName}_crop.eps`;
+      window.EPS.build(c, { title: S.fileName }).then((blob) => {
+        saveBlob(blob, name, `已生成并下载 ${name}（${(blob.size / 1024).toFixed(1)} KB）`);
+      }).catch((e) => toast('EPS 生成失败：' + (e && e.message ? e.message : e)));
+      return;
+    }
+
     c.toBlob((blob) => {
       if (!blob) { toast('导出失败，试试换个输出格式'); return; }
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `${S.fileName}_crop.${extFor(S.format)}`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-      toast('已下载 ' + a.download);
+      saveBlob(blob, `${S.fileName}_crop.${extFor(S.format)}`);
     }, S.format, S.quality);
+  }
+
+  function saveBlob(blob, filename, msg) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast(msg || ('已下载 ' + filename));
   }
 
   async function copyToClipboard() {
@@ -507,7 +567,7 @@
     /* 输出设置 */
     $('#cropFormat').addEventListener('change', (e) => {
       S.format = e.target.value;
-      $('#cropQualityRow').hidden = S.format === 'image/png';
+      $('#cropQualityRow').hidden = (S.format === 'image/png' || S.format === 'eps');
       preview();
     });
     $('#cropQuality').addEventListener('input', (e) => {
